@@ -1,16 +1,16 @@
+use super::Transaction;
+use crate::account::AccountInformation;
 use crate::account::{AccountIdVar, AccountInformationVar, AccountPublicKeyVar};
 use crate::ledger::{self, AccPathVar, AccRootVar, AmountVar, ParametersVar};
+use crate::ledger::{AccPath, AccRoot, Parameters, State};
+use crate::signature::constraints::SigVerifyGadget;
+use crate::signature::schnorr::constraints::{
+    ParametersVar as SchnorrParamsVar, SchnorrSignatureVerifyGadget, SignatureVar,
+};
 use crate::ConstraintF;
 use ark_ed_on_bls12_381::{constraints::EdwardsVar, EdwardsProjective};
 use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, Namespace, SynthesisError};
-use crate::simple_payments::account::AccountInformation;
-use crate::simple_payments::ledger::{AccPath, AccRoot, Parameters, State};
-use crate::simple_payments::signature::schnorr::constraints::{
-    ParametersVar as SchnorrParamsVar, SchnorrSignatureVerifyGadget, SignatureVar,
-};
-use crate::simple_payments::signature::SigVerifyGadget;
-use crate::simple_payments::transaction::Transaction;
 use std::borrow::Borrow;
 
 /// Transaction transferring some amount from one account to another.
@@ -318,11 +318,10 @@ impl ConstraintSynthesizer<ConstraintF> for UnaryRollup {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::ledger::{Amount, Parameters, State};
     use ark_relations::r1cs::{
         ConstraintLayer, ConstraintSynthesizer, ConstraintSystem, TracingMode::OnlyConstraints,
     };
-    use crate::simple_payments::ledger::{Amount, Parameters, State};
-    use crate::simple_payments::transaction::Transaction;
     use tracing_subscriber::layer::SubscriberExt;
 
     fn test_cs(rollup: UnaryRollup) -> bool {

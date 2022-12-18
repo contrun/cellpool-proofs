@@ -2,6 +2,11 @@ use super::ledger::*;
 use super::signature::schnorr;
 use ark_ed_on_bls12_381::EdwardsProjective;
 
+#[cfg(feature = "r1cs")]
+pub mod constraints;
+#[cfg(feature = "r1cs")]
+pub use constraints::*;
+
 /// Account public key used to verify transaction signatures.
 pub type AccountPublicKey = schnorr::PublicKey<EdwardsProjective>;
 /// Account secret key used to create transaction signatures.

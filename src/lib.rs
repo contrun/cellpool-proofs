@@ -4,8 +4,9 @@ pub mod account;
 pub mod ledger;
 pub mod transaction;
 
-pub mod rollup;
+pub mod random_oracle;
+pub mod signature;
 
-pub mod simple_payments;
+pub mod rollup;
 
 extern crate derivative;
