@@ -1,6 +1,6 @@
 use super::account::{AccountId, AccountInformation, AccountPublicKey, AccountSecretKey};
 use super::signature::{schnorr, SignatureScheme};
-use super::transaction::Transaction;
+use super::transaction::SignedTransaction;
 use ark_crypto_primitives::crh::{
     injective_map::{PedersenCRHCompressor, TECompressor},
     pedersen, TwoToOneCRH, CRH,
@@ -176,7 +176,7 @@ impl State {
     }
 
     /// Update the state by applying the transaction `tx`, if `tx` is valid.
-    pub fn apply_transaction(&mut self, pp: &Parameters, tx: &Transaction) -> Option<()> {
+    pub fn apply_transaction(&mut self, pp: &Parameters, tx: &SignedTransaction) -> Option<()> {
         if tx.validate(pp, self) {
             let old_sender_bal = self.id_to_account_info.get(&tx.sender)?.balance;
             let old_receiver_bal = self.id_to_account_info.get(&tx.recipient)?.balance;
@@ -193,7 +193,7 @@ impl State {
 
 #[cfg(test)]
 mod test {
-    use super::Transaction;
+    use super::SignedTransaction;
     use super::{AccountId, Amount, Parameters, State};
 
     #[test]
@@ -212,22 +212,23 @@ mod test {
         let (bob_id, _bob_pk, bob_sk) = state.sample_keys_and_register(&pp, &mut rng).unwrap();
 
         // Alice wants to transfer 5 units to Bob.
-        let tx1 = Transaction::create(&pp, alice_id, bob_id, Amount(5), &alice_sk, &mut rng);
+        let tx1 = SignedTransaction::create(&pp, alice_id, bob_id, Amount(5), &alice_sk, &mut rng);
         assert!(tx1.validate(&pp, &state));
         state.apply_transaction(&pp, &tx1).expect("should work");
         // Let's try creating invalid transactions:
         // First, let's try a transaction where the amount is larger than Alice's balance.
-        let bad_tx = Transaction::create(&pp, alice_id, bob_id, Amount(6), &alice_sk, &mut rng);
+        let bad_tx =
+            SignedTransaction::create(&pp, alice_id, bob_id, Amount(6), &alice_sk, &mut rng);
         assert!(!bad_tx.validate(&pp, &state));
         assert!(matches!(state.apply_transaction(&pp, &bad_tx), None));
         // Next, let's try a transaction where the signature is incorrect:
-        let bad_tx = Transaction::create(&pp, alice_id, bob_id, Amount(5), &bob_sk, &mut rng);
+        let bad_tx = SignedTransaction::create(&pp, alice_id, bob_id, Amount(5), &bob_sk, &mut rng);
         assert!(!bad_tx.validate(&pp, &state));
         assert!(matches!(state.apply_transaction(&pp, &bad_tx), None));
 
         // Finally, let's try a transaction to an non-existant account:
         let bad_tx =
-            Transaction::create(&pp, alice_id, AccountId(10), Amount(5), &alice_sk, &mut rng);
+            SignedTransaction::create(&pp, alice_id, AccountId(10), Amount(5), &alice_sk, &mut rng);
         assert!(!bad_tx.validate(&pp, &state));
         assert!(matches!(state.apply_transaction(&pp, &bad_tx), None));
     }

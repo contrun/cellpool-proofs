@@ -1,3 +1,5 @@
+use crate::signature::Signature;
+
 use super::account::{AccountId, AccountPublicKey, AccountSecretKey};
 use super::ledger::{self, Amount};
 use super::signature::{
@@ -21,12 +23,43 @@ pub struct Transaction {
     pub recipient: AccountId,
     /// The amount being transferred from the sender to the receiver.
     pub amount: Amount,
-    /// The spend authorization is a signature over the sender, the recipient,
-    /// and the amount.
-    pub signature: schnorr::Signature<EdwardsProjective>,
 }
 
-impl Transaction {
+/// Transaction transferring some amount from one account to another.
+#[derive(Clone, Debug)]
+pub struct SignedTransaction {
+    /// The account information of the sender.
+    pub sender: AccountId,
+    /// The account information of the recipient.
+    pub recipient: AccountId,
+    /// The amount being transferred from the sender to the receiver.
+    pub amount: Amount,
+    /// The spend authorization is a signature over the sender, the recipient,
+    /// and the amount.
+    pub signature: Signature,
+}
+
+impl From<SignedTransaction> for Transaction {
+    fn from(signed_transaction: SignedTransaction) -> Transaction {
+        Transaction {
+            sender: signed_transaction.sender,
+            recipient: signed_transaction.recipient,
+            amount: signed_transaction.amount,
+        }
+    }
+}
+
+impl From<&SignedTransaction> for Transaction {
+    fn from(signed_transaction: &SignedTransaction) -> Transaction {
+        Transaction {
+            sender: signed_transaction.sender,
+            recipient: signed_transaction.recipient,
+            amount: signed_transaction.amount,
+        }
+    }
+}
+
+impl SignedTransaction {
     /// Verify just the signature in the transaction.
     fn verify_signature(
         &self,

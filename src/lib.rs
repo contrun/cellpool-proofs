@@ -1,4 +1,5 @@
 pub type ConstraintF = ark_bls12_381::Fr;
+pub use ark_ed_on_bls12_381::{constraints::EdwardsVar, EdwardsProjective};
 
 pub mod account;
 pub mod ledger;

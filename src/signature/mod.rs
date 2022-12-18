@@ -1,3 +1,4 @@
+use crate::EdwardsProjective;
 use ark_crypto_primitives::Error;
 use ark_ff::bytes::ToBytes;
 use ark_std::hash::Hash;
@@ -9,6 +10,8 @@ pub mod constraints;
 pub use constraints::*;
 
 pub mod schnorr;
+
+pub type Signature = schnorr::Signature<EdwardsProjective>;
 
 pub trait SignatureScheme {
     type Parameters: Clone + Send + Sync;

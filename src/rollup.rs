@@ -1,11 +1,12 @@
 use crate::account::AccountInformationVar;
 use crate::ledger::*;
-use crate::transaction::TransactionVar;
+use crate::signature::{Signature, SignatureVar};
+use crate::transaction::{Transaction, TransactionVar};
 use crate::ConstraintF;
 use crate::{
     account::AccountInformation,
     ledger::{AccPath, AccRoot, Parameters, State},
-    transaction::Transaction,
+    transaction::SignedTransaction,
 };
 use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
@@ -19,6 +20,8 @@ pub struct Rollup<const NUM_TX: usize> {
     pub final_root: Option<AccRoot>,
     /// The current batch of transactions.
     pub transactions: Option<Vec<Transaction>>,
+    /// The current batch of transactions.
+    pub signatures: Option<Vec<Signature>>,
     /// The sender's account information and corresponding authentication path,
     /// *before* applying the transactions.
     pub sender_pre_tx_info_and_paths: Option<Vec<(AccountInformation, AccPath)>>,
@@ -43,6 +46,7 @@ impl<const NUM_TX: usize> Rollup<NUM_TX> {
             initial_root: None,
             final_root: None,
             transactions: None,
+            signatures: None,
             sender_pre_tx_info_and_paths: None,
             sender_post_paths: None,
             recv_pre_tx_info_and_paths: None,
@@ -61,6 +65,7 @@ impl<const NUM_TX: usize> Rollup<NUM_TX> {
             initial_root: Some(initial_root),
             final_root: Some(final_root),
             transactions: None,
+            signatures: None,
             sender_pre_tx_info_and_paths: None,
             sender_post_paths: None,
             recv_pre_tx_info_and_paths: None,
@@ -71,7 +76,7 @@ impl<const NUM_TX: usize> Rollup<NUM_TX> {
 
     pub fn with_state_and_transactions(
         ledger_params: Parameters,
-        transactions: &[Transaction],
+        transactions: &[SignedTransaction],
         state: &mut State,
         validate_transactions: bool,
     ) -> Option<Self> {
@@ -126,7 +131,8 @@ impl<const NUM_TX: usize> Rollup<NUM_TX> {
             ledger_params,
             initial_root,
             final_root: Some(state.root()),
-            transactions: Some(transactions.to_vec()),
+            transactions: Some(transactions.iter().map(Into::into).collect()),
+            signatures: Some(transactions.iter().map(|s| s.signature.clone()).collect()),
             sender_pre_tx_info_and_paths: Some(sender_pre_tx_info_and_paths),
             recv_pre_tx_info_and_paths: Some(recipient_pre_tx_info_and_paths),
             sender_post_paths: Some(sender_post_paths),
@@ -160,6 +166,7 @@ impl<const NUM_TX: usize> ConstraintSynthesizer<ConstraintF> for Rollup<NUM_TX> 
 
         for i in 0..NUM_TX {
             let tx = self.transactions.as_ref().and_then(|t| t.get(i));
+            let signature = self.signatures.as_ref().and_then(|t| t.get(i));
 
             let sender_acc_info = self.sender_pre_tx_info_and_paths.as_ref().map(|t| t[i].0);
             let sender_pre_path = self.sender_pre_tx_info_and_paths.as_ref().map(|t| &t[i].1);
@@ -176,6 +183,9 @@ impl<const NUM_TX: usize> ConstraintSynthesizer<ConstraintF> for Rollup<NUM_TX> 
 
             let tx = TransactionVar::new_witness(ark_relations::ns!(cs, "Transaction"), || {
                 tx.ok_or(SynthesisError::AssignmentMissing)
+            })?;
+            let signature = SignatureVar::new_witness(ark_relations::ns!(cs, "Signature"), || {
+                signature.ok_or(SynthesisError::AssignmentMissing)
             })?;
             // Declare the sender's initial account balance...
             let sender_acc_info = AccountInformationVar::new_witness(
@@ -223,6 +233,7 @@ impl<const NUM_TX: usize> ConstraintSynthesizer<ConstraintF> for Rollup<NUM_TX> 
             // TODO: Uncomment this
             tx.validate(
                 &ledger_params,
+                &signature,
                 &sender_acc_info,
                 &sender_pre_path,
                 &sender_post_path,
@@ -250,7 +261,7 @@ mod test {
     use super::*;
     use crate::account::AccountId;
     use crate::ledger::{Amount, Parameters, State};
-    use crate::transaction::Transaction;
+    use crate::transaction::SignedTransaction;
     use ark_relations::r1cs::{
         ConstraintLayer, ConstraintSynthesizer, ConstraintSystem, TracingMode::OnlyConstraints,
     };
@@ -287,7 +298,7 @@ mod test {
 
         // Alice wants to transfer 5 units to Bob.
         let mut temp_state = state.clone();
-        let tx1 = Transaction::create(&pp, alice_id, bob_id, Amount(5), &alice_sk, &mut rng);
+        let tx1 = SignedTransaction::create(&pp, alice_id, bob_id, Amount(5), &alice_sk, &mut rng);
         assert!(tx1.validate(&pp, &temp_state));
         let rollup =
             Rollup::<1>::with_state_and_transactions(pp.clone(), &[tx1], &mut temp_state, true)
@@ -295,7 +306,7 @@ mod test {
         assert!(test_cs(rollup));
 
         let mut temp_state = state.clone();
-        let bad_tx = Transaction::create(&pp, alice_id, bob_id, Amount(5), &bob_sk, &mut rng);
+        let bad_tx = SignedTransaction::create(&pp, alice_id, bob_id, Amount(5), &bob_sk, &mut rng);
         assert!(!bad_tx.validate(&pp, &temp_state));
         assert!(matches!(temp_state.apply_transaction(&pp, &bad_tx), None));
         let rollup = Rollup::<1>::with_state_and_transactions(
@@ -325,7 +336,7 @@ mod test {
 
         // Alice wants to transfer 5 units to Bob.
         let mut temp_state = state.clone();
-        let tx1 = Transaction::create(&pp, alice_id, bob_id, Amount(5), &alice_sk, &mut rng);
+        let tx1 = SignedTransaction::create(&pp, alice_id, bob_id, Amount(5), &alice_sk, &mut rng);
         assert!(tx1.validate(&pp, &temp_state));
         let rollup = Rollup::<1>::with_state_and_transactions(
             pp.clone(),
@@ -361,7 +372,8 @@ mod test {
         // Let's try creating invalid transactions:
         // First, let's try a transaction where the amount is larger than Alice's balance.
         let mut temp_state = state.clone();
-        let bad_tx = Transaction::create(&pp, alice_id, bob_id, Amount(21), &alice_sk, &mut rng);
+        let bad_tx =
+            SignedTransaction::create(&pp, alice_id, bob_id, Amount(21), &alice_sk, &mut rng);
         assert!(!bad_tx.validate(&pp, &temp_state));
         assert!(matches!(temp_state.apply_transaction(&pp, &bad_tx), None));
         let rollup = Rollup::<1>::with_state_and_transactions(
@@ -375,7 +387,7 @@ mod test {
 
         // Next, let's try a transaction where the signature is incorrect:
         let mut temp_state = state.clone();
-        let bad_tx = Transaction::create(&pp, alice_id, bob_id, Amount(5), &bob_sk, &mut rng);
+        let bad_tx = SignedTransaction::create(&pp, alice_id, bob_id, Amount(5), &bob_sk, &mut rng);
         assert!(!bad_tx.validate(&pp, &temp_state));
         assert!(matches!(temp_state.apply_transaction(&pp, &bad_tx), None));
         let rollup = Rollup::<1>::with_state_and_transactions(
@@ -389,7 +401,7 @@ mod test {
 
         // Finally, let's try a transaction to an non-existant account:
         let bad_tx =
-            Transaction::create(&pp, alice_id, AccountId(10), Amount(5), &alice_sk, &mut rng);
+            SignedTransaction::create(&pp, alice_id, AccountId(10), Amount(5), &alice_sk, &mut rng);
         assert!(!bad_tx.validate(&pp, &state));
         assert!(matches!(temp_state.apply_transaction(&pp, &bad_tx), None));
     }
@@ -415,7 +427,7 @@ mod test {
 
         // Alice wants to transfer amount_to_send units to Bob, and does this twice
         let mut temp_state = state.clone();
-        let tx1 = Transaction::create(
+        let tx1 = SignedTransaction::create(
             &pp,
             alice_id,
             bob_id,
