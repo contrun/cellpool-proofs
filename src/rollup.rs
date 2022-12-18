@@ -162,6 +162,7 @@ impl<const NUM_TX: usize> ConstraintSynthesizer<ConstraintF> for Rollup<NUM_TX> 
         let final_root = AccRootVar::new_input(ark_relations::ns!(cs, "Final root"), || {
             self.final_root.ok_or(SynthesisError::AssignmentMissing)
         })?;
+
         let mut prev_root = initial_root;
 
         for i in 0..NUM_TX {
@@ -198,8 +199,6 @@ impl<const NUM_TX: usize> ConstraintSynthesizer<ConstraintF> for Rollup<NUM_TX> 
                     sender_pre_path.ok_or(SynthesisError::AssignmentMissing)
                 })?;
             // ... and authentication path after the update.
-            // TODO: Fill in the following
-            // let sender_post_path = ???
             let sender_post_path =
                 AccPathVar::new_witness(ark_relations::ns!(cs, "Sender Post-Path"), || {
                     sender_post_path.ok_or(SynthesisError::AssignmentMissing)
@@ -217,7 +216,6 @@ impl<const NUM_TX: usize> ConstraintSynthesizer<ConstraintF> for Rollup<NUM_TX> 
                 })?;
 
             // ... and authentication path after the update.
-            // TODO: Fill in the following
             let recipient_post_path =
                 AccPathVar::new_witness(ark_relations::ns!(cs, "Recipient Post-Path"), || {
                     recipient_post_path.ok_or(SynthesisError::AssignmentMissing)
@@ -230,7 +228,6 @@ impl<const NUM_TX: usize> ConstraintSynthesizer<ConstraintF> for Rollup<NUM_TX> 
                 })?;
 
             // Validate that the transaction signature and amount is correct.
-            // TODO: Uncomment this
             tx.validate(
                 &ledger_params,
                 &signature,
@@ -250,7 +247,6 @@ impl<const NUM_TX: usize> ConstraintSynthesizer<ConstraintF> for Rollup<NUM_TX> 
         }
         // Check that the final root is consistent with the root computed after
         // applying all state transitions
-        // TODO: implement this
         final_root.enforce_equal(&prev_root)?;
         Ok(())
     }
