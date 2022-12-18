@@ -10,6 +10,11 @@ use ark_ed_on_bls12_381::EdwardsProjective;
 use ark_std::rand::Rng;
 use std::collections::HashMap;
 
+#[cfg(feature = "r1cs")]
+pub mod constraints;
+#[cfg(feature = "r1cs")]
+pub use constraints::*;
+
 /// Represents transaction amounts and account balances.
 #[derive(Hash, Eq, PartialEq, Copy, Clone, PartialOrd, Ord, Debug)]
 pub struct Amount(pub u64);

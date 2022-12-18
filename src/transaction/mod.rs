@@ -7,6 +7,11 @@ use super::signature::{
 use ark_ed_on_bls12_381::EdwardsProjective;
 use ark_std::rand::Rng;
 
+#[cfg(feature = "r1cs")]
+pub mod constraints;
+#[cfg(feature = "r1cs")]
+pub use constraints::*;
+
 /// Transaction transferring some amount from one account to another.
 #[derive(Clone, Debug)]
 pub struct Transaction {
