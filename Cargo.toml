@@ -38,3 +38,20 @@ default = [ "std", "parallel", "r1cs" ]
 std = [ "ark-ff/std", "ark-ec/std", "ark-std/std", "ark-relations/std", "ark-serialize/std", "ark-crypto-primitives/std" ]
 r1cs = [ "ark-relations", "ark-r1cs-std", "ark-crypto-primitives/r1cs" ]
 parallel = [ "std", "ark-ff/parallel", "ark-ec/parallel", "ark-std/parallel" ]
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+incremental = true
+panic = 'abort'
+
+[profile.dev]
+opt-level = 0
+panic = 'abort'
+
+[profile.test]
+opt-level = 3
+lto = "thin"
+incremental = true
+debug-assertions = true
+debug = true
