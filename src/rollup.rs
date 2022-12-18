@@ -310,13 +310,9 @@ mod test {
         let mut temp_state = state.clone();
         let tx1 = Transaction::create(&pp, alice_id, bob_id, Amount(5), &alice_sk, &mut rng);
         assert!(tx1.validate(&pp, &temp_state));
-        let rollup = Rollup::<1>::with_state_and_transactions(
-            pp.clone(),
-            &[tx1.clone()],
-            &mut temp_state,
-            true,
-        )
-        .unwrap();
+        let rollup =
+            Rollup::<1>::with_state_and_transactions(pp.clone(), &[tx1], &mut temp_state, true)
+                .unwrap();
         assert!(test_cs(rollup));
 
         let mut temp_state = state.clone();
@@ -364,7 +360,7 @@ mod test {
         let mut temp_state = state.clone();
         let rollup = Rollup::<2>::with_state_and_transactions(
             pp.clone(),
-            &[tx1.clone(), tx1.clone()],
+            &[tx1.clone(), tx1],
             &mut temp_state,
             true,
         )
@@ -434,7 +430,7 @@ mod test {
             .update_balance(alice_id, Amount(1000))
             .expect("Alice's account should exist");
         // Let's make an account for Bob.
-        let (bob_id, _bob_pk, bob_sk) = state.sample_keys_and_register(&pp, &mut rng).unwrap();
+        let (bob_id, _bob_pk, _bob_sk) = state.sample_keys_and_register(&pp, &mut rng).unwrap();
 
         let amount_to_send = rng.gen_range(0..200);
 
@@ -448,14 +444,14 @@ mod test {
             &alice_sk,
             &mut rng,
         );
-        let rollup = Rollup::<2>::with_state_and_transactions(
+
+        Rollup::<2>::with_state_and_transactions(
             pp.clone(),
             &[tx1.clone(), tx1.clone()],
             &mut temp_state,
             true,
         )
-        .unwrap();
-        rollup
+        .unwrap()
     }
 
     #[test]

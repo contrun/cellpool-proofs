@@ -129,11 +129,11 @@ impl TransactionVar {
         )?;
 
         // TODO: Uncomment the following
-        Ok(sender_exists
+        sender_exists
             .and(&sender_updated_correctly)?
             .and(&recipient_exists)?
             .and(&recipient_updated_correctly)?
-            .and(&sig_verifies)?)
+            .and(&sig_verifies)
     }
 }
 

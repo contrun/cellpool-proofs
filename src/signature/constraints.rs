@@ -52,8 +52,8 @@ mod test {
         let rng = &mut test_rng();
         let parameters = S::setup::<_>(rng).unwrap();
         let (pk, sk) = S::keygen(&parameters, rng).unwrap();
-        let sig = S::sign(&parameters, &sk, &message, rng).unwrap();
-        assert!(S::verify(&parameters, &pk, &message, &sig).unwrap());
+        let sig = S::sign(&parameters, &sk, message, rng).unwrap();
+        assert!(S::verify(&parameters, &pk, message, &sig).unwrap());
 
         let cs = ConstraintSystem::<F>::new_ref();
 

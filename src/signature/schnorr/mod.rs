@@ -106,7 +106,7 @@ where
             // Hash everything to get verifier challenge.
             // e := H(salt || pubkey || r || msg);
             let mut hash_input = Vec::new();
-            if parameters.salt != None {
+            if parameters.salt.is_some() {
                 hash_input.extend_from_slice(&parameters.salt.unwrap());
             }
             hash_input.extend_from_slice(&to_bytes![sk.public_key]?);
@@ -157,7 +157,7 @@ where
 
         // e = H(salt, kG, msg)
         let mut hash_input = Vec::new();
-        if parameters.salt != None {
+        if parameters.salt.is_some() {
             hash_input.extend_from_slice(&parameters.salt.unwrap());
         }
         hash_input.extend_from_slice(&to_bytes![pk]?);
