@@ -5,15 +5,17 @@ use ark_relations::r1cs::ConstraintSystemRef;
 use ark_relations::r1cs::{Namespace, SynthesisError};
 use ark_std::vec::Vec;
 
-use crate::random_oracle::blake2s::constraints::{ParametersVar as B2SParamsVar, ROGadget};
-use crate::random_oracle::RandomOracleGadget;
-use crate::signature::SigVerifyGadget;
+use super::super::super::random_oracle::blake2s::constraints::{
+    ParametersVar as B2SParamsVar, ROGadget,
+};
+use super::super::super::random_oracle::RandomOracleGadget;
+use super::super::SigVerifyGadget;
 
 use derivative::Derivative;
 
 use core::{borrow::Borrow, marker::PhantomData};
 
-use crate::signature::schnorr::{Parameters, PublicKey, Schnorr, Signature};
+use super::{Parameters, PublicKey, Schnorr, Signature};
 
 type ConstraintF<C> = <<C as ProjectiveCurve>::BaseField as Field>::BasePrimeField;
 

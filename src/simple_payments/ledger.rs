@@ -1,6 +1,6 @@
-use crate::account::{AccountId, AccountInformation, AccountPublicKey, AccountSecretKey};
-use crate::signature::{schnorr, SignatureScheme};
-use crate::transaction::Transaction;
+use super::account::{AccountId, AccountInformation, AccountPublicKey, AccountSecretKey};
+use super::signature::{schnorr, SignatureScheme};
+use super::transaction::Transaction;
 use ark_crypto_primitives::crh::{
     injective_map::{PedersenCRHCompressor, TECompressor},
     pedersen, TwoToOneCRH, CRH,
@@ -188,8 +188,8 @@ impl State {
 
 #[cfg(test)]
 mod test {
+    use super::Transaction;
     use super::{AccountId, Amount, Parameters, State};
-    use crate::transaction::Transaction;
 
     #[test]
     fn end_to_end() {

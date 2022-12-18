@@ -1,4 +1,4 @@
-use crate::random_oracle::{blake2s, RandomOracleGadget};
+use super::super::RandomOracleGadget;
 use ark_crypto_primitives::prf::blake2s::constraints::{evaluate_blake2s, OutputVar};
 use ark_ff::{Field, PrimeField};
 use ark_r1cs_std::prelude::*;
@@ -12,7 +12,7 @@ pub struct ParametersVar;
 
 pub struct ROGadget;
 
-impl<F: PrimeField> RandomOracleGadget<blake2s::RO, F> for ROGadget {
+impl<F: PrimeField> RandomOracleGadget<super::RO, F> for ROGadget {
     type OutputVar = OutputVar<F>;
     type ParametersVar = ParametersVar;
 
@@ -47,10 +47,9 @@ impl<ConstraintF: Field> AllocVar<(), ConstraintF> for ParametersVar {
 
 #[cfg(test)]
 mod test {
-    use crate::random_oracle::{
-        blake2s::{constraints::ROGadget, RO},
-        RandomOracle, RandomOracleGadget,
-    };
+    use super::super::super::RandomOracleGadget;
+    use super::super::RandomOracle;
+    use super::super::{constraints::ROGadget, RO};
     use ark_ed_on_bls12_381::Fq as Fr;
     use ark_r1cs_std::prelude::*;
     use ark_relations::r1cs::ConstraintSystem;

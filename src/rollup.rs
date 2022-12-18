@@ -4,7 +4,7 @@ use crate::transaction::TransactionVar;
 use crate::ConstraintF;
 use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
-use ark_simple_payments::{
+use crate::simple_payments::{
     account::AccountInformation,
     ledger::{AccPath, AccRoot, Parameters, State},
     transaction::Transaction,
@@ -272,9 +272,9 @@ mod test {
     use ark_relations::r1cs::{
         ConstraintLayer, ConstraintSynthesizer, ConstraintSystem, TracingMode::OnlyConstraints,
     };
-    use ark_simple_payments::account::AccountId;
-    use ark_simple_payments::ledger::{Amount, Parameters, State};
-    use ark_simple_payments::transaction::Transaction;
+    use crate::simple_payments::account::AccountId;
+    use crate::simple_payments::ledger::{Amount, Parameters, State};
+    use crate::simple_payments::transaction::Transaction;
     use tracing_subscriber::layer::SubscriberExt;
 
     fn test_cs<const NUM_TX: usize>(rollup: Rollup<NUM_TX>) -> bool {

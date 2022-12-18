@@ -1,5 +1,5 @@
-use crate::ledger::*;
-use crate::signature::schnorr;
+use super::ledger::*;
+use super::signature::schnorr;
 use ark_ed_on_bls12_381::EdwardsProjective;
 
 /// Account public key used to verify transaction signatures.

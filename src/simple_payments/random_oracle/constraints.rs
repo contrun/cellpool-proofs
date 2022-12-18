@@ -1,7 +1,7 @@
 use ark_ff::Field;
 use core::fmt::Debug;
 
-use crate::random_oracle::RandomOracle;
+use super::RandomOracle;
 use ark_relations::r1cs::SynthesisError;
 
 use ark_r1cs_std::prelude::*;

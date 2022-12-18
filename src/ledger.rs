@@ -11,8 +11,8 @@ use ark_ed_on_bls12_381::{constraints::EdwardsVar, EdwardsProjective};
 use ark_r1cs_std::bits::uint64::UInt64;
 use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{Namespace, SynthesisError};
-use ark_simple_payments::ledger::*;
-use ark_simple_payments::signature::schnorr::constraints::ParametersVar as SchnorrParamsVar;
+use crate::simple_payments::ledger::*;
+use crate::simple_payments::signature::schnorr::constraints::ParametersVar as SchnorrParamsVar;
 use std::borrow::Borrow;
 
 /// Represents transaction amounts and account balances.

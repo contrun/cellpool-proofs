@@ -1,6 +1,6 @@
-use crate::account::{AccountId, AccountPublicKey, AccountSecretKey};
-use crate::ledger::{self, Amount};
-use crate::signature::{
+use super::account::{AccountId, AccountPublicKey, AccountSecretKey};
+use super::ledger::{self, Amount};
+use super::signature::{
     schnorr::{self, Schnorr},
     SignatureScheme,
 };

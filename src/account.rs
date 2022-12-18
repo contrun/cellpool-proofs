@@ -4,8 +4,8 @@ use ark_ed_on_bls12_381::{constraints::EdwardsVar, EdwardsProjective};
 use ark_r1cs_std::bits::{uint8::UInt8, ToBytesGadget};
 use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{Namespace, SynthesisError};
-use ark_simple_payments::account::*;
-use ark_simple_payments::signature::schnorr::constraints::*;
+use crate::simple_payments::account::*;
+use crate::simple_payments::signature::schnorr::constraints::*;
 use std::borrow::Borrow;
 
 /// Account public key used to verify transaction signatures.
