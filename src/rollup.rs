@@ -31,9 +31,6 @@ pub struct Rollup<const NUM_TX: usize> {
     /// The authentication path corresponding to the recipient's account information
     /// *after* applying the transactions.
     pub recv_post_paths: Option<Vec<AccPath>>,
-    /// List of state roots, so that the i-th root is the state roots before applying
-    /// the i-th transaction. This means that `pre_tx_roots[0] == initial_root`.
-    pub pre_tx_roots: Option<Vec<AccRoot>>,
     /// List of state roots, so that the i-th root is the state root after applying
     /// the i-th transaction. This means that `post_tx_roots[NUM_TX - 1] == final_root`.
     pub post_tx_roots: Option<Vec<AccRoot>>,
@@ -50,7 +47,6 @@ impl<const NUM_TX: usize> Rollup<NUM_TX> {
             sender_post_paths: None,
             recv_pre_tx_info_and_paths: None,
             recv_post_paths: None,
-            pre_tx_roots: None,
             post_tx_roots: None,
         }
     }
@@ -69,7 +65,6 @@ impl<const NUM_TX: usize> Rollup<NUM_TX> {
             sender_post_paths: None,
             recv_pre_tx_info_and_paths: None,
             recv_post_paths: None,
-            pre_tx_roots: None,
             post_tx_roots: None,
         }
     }
@@ -86,7 +81,6 @@ impl<const NUM_TX: usize> Rollup<NUM_TX> {
         let mut recipient_pre_tx_info_and_paths = Vec::with_capacity(NUM_TX);
         let mut sender_post_paths = Vec::with_capacity(NUM_TX);
         let mut recipient_post_paths = Vec::with_capacity(NUM_TX);
-        let mut pre_tx_roots = Vec::with_capacity(NUM_TX);
         let mut post_tx_roots = Vec::with_capacity(NUM_TX);
         for tx in transactions {
             if !tx.validate(&ledger_params, &*state) && validate_transactions {
@@ -96,7 +90,6 @@ impl<const NUM_TX: usize> Rollup<NUM_TX> {
         for tx in transactions {
             let sender_id = tx.sender;
             let recipient_id = tx.recipient;
-            let pre_tx_root = state.root();
             let sender_pre_acc_info = *state.id_to_account_info.get(&sender_id)?;
             let sender_pre_path = state
                 .account_merkle_tree
@@ -126,7 +119,6 @@ impl<const NUM_TX: usize> Rollup<NUM_TX> {
             recipient_pre_tx_info_and_paths.push((recipient_pre_acc_info, recipient_pre_path));
             sender_post_paths.push(sender_post_path);
             recipient_post_paths.push(recipient_post_path);
-            pre_tx_roots.push(pre_tx_root);
             post_tx_roots.push(post_tx_root);
         }
 
@@ -139,7 +131,6 @@ impl<const NUM_TX: usize> Rollup<NUM_TX> {
             recv_pre_tx_info_and_paths: Some(recipient_pre_tx_info_and_paths),
             sender_post_paths: Some(sender_post_paths),
             recv_post_paths: Some(recipient_post_paths),
-            pre_tx_roots: Some(pre_tx_roots),
             post_tx_roots: Some(post_tx_roots),
         })
     }
@@ -179,7 +170,6 @@ impl<const NUM_TX: usize> ConstraintSynthesizer<ConstraintF> for Rollup<NUM_TX> 
             let sender_post_path = self.sender_post_paths.as_ref().map(|t| &t[i]);
             let recipient_post_path = self.recv_post_paths.as_ref().map(|t| &t[i]);
 
-            let pre_tx_root = self.pre_tx_roots.as_ref().map(|t| t[i]);
             let post_tx_root = self.post_tx_roots.as_ref().map(|t| t[i]);
 
             // Let's declare all these things!
@@ -223,22 +213,11 @@ impl<const NUM_TX: usize> ConstraintSynthesizer<ConstraintF> for Rollup<NUM_TX> 
                     recipient_post_path.ok_or(SynthesisError::AssignmentMissing)
                 })?;
 
-            // Declare the state root before the transaction...
-            let pre_tx_root =
-                AccRootVar::new_witness(ark_relations::ns!(cs, "Pre-tx Root"), || {
-                    pre_tx_root.ok_or(SynthesisError::AssignmentMissing)
-                })?;
             // ... and after the transaction.
             let post_tx_root =
                 AccRootVar::new_witness(ark_relations::ns!(cs, "Post-tx Root"), || {
                     post_tx_root.ok_or(SynthesisError::AssignmentMissing)
                 })?;
-
-            // Enforce that the state root after the previous transaction equals
-            // the starting state root for this transaction
-            // TODO: Write this
-            //
-            pre_tx_root.enforce_equal(&prev_root)?;
 
             // Validate that the transaction signature and amount is correct.
             // TODO: Uncomment this
@@ -250,7 +229,7 @@ impl<const NUM_TX: usize> ConstraintSynthesizer<ConstraintF> for Rollup<NUM_TX> 
                 &recipient_acc_info,
                 &recipient_pre_path,
                 &recipient_post_path,
-                &pre_tx_root,
+                &prev_root,
                 &post_tx_root,
             )?
             .enforce_equal(&Boolean::TRUE)?;
@@ -492,4 +471,3 @@ mod test {
         assert!(!valid_proof);
     }
 }
-// Optimization ideas: remove `pre_tx_roots` entirely.
