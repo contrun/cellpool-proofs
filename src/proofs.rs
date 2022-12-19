@@ -6,6 +6,7 @@ use ark_bls12_381::Bls12_381;
 use ark_groth16::Groth16;
 use ark_serialize::*;
 use ark_snark::SNARK;
+use thiserror::Error;
 
 #[derive(Clone, Debug, PartialEq, CanonicalSerialize, CanonicalDeserialize)]
 pub struct Proof {
@@ -13,14 +14,28 @@ pub struct Proof {
     vk: <Groth16<Bls12_381> as SNARK<ConstraintF>>::VerifyingKey,
 }
 
-pub fn rollup_and_prove(state: &mut State, transactions: &[SignedTransaction]) -> Option<Proof> {
-    let rollup = state.rollup_transactions(transactions, true, true)?;
+#[derive(Error, Debug)]
+pub enum ProofError {
+    #[error("Unable to rollup transactions")]
+    Rollup,
+    #[error("Underlying proving engine error: {0}")]
+    ProvingEngine(ark_relations::r1cs::SynthesisError),
+}
+
+pub fn rollup_and_prove(
+    state: &mut State,
+    transactions: &[SignedTransaction],
+) -> Result<Proof, ProofError> {
+    let rollup = state
+        .rollup_transactions(transactions, true, true)
+        .ok_or(ProofError::Rollup)?;
 
     let mut rng = ark_std::test_rng();
-    let (pk, vk) = Groth16::<Bls12_381>::circuit_specific_setup(rollup.clone(), &mut rng).unwrap();
+    let (pk, vk) = Groth16::<Bls12_381>::circuit_specific_setup(rollup.clone(), &mut rng)
+        .map_err(ProofError::ProvingEngine)?;
 
-    let proof = Groth16::prove(&pk, rollup, &mut rng).unwrap();
-    Some(Proof { proof, vk })
+    let proof = Groth16::prove(&pk, rollup, &mut rng).map_err(ProofError::ProvingEngine)?;
+    Ok(Proof { proof, vk })
 }
 
 pub fn verify(
@@ -28,9 +43,9 @@ pub fn verify(
     initial_root: AccRoot,
     final_root: AccRoot,
     transactions: &[Transaction],
-) -> Result<bool, <Groth16<Bls12_381> as SNARK<ConstraintF>>::Error> {
+) -> Result<bool, ProofError> {
     let public_inputs = get_public_inputs(initial_root, final_root, transactions);
-    Groth16::verify(&proof.vk, &public_inputs, &proof.proof)
+    Groth16::verify(&proof.vk, &public_inputs, &proof.proof).map_err(ProofError::ProvingEngine)
 }
 
 pub(crate) fn get_public_inputs(
@@ -116,6 +131,6 @@ mod test {
         let (mut state, _txs, signed_txs) = build_n_transactions(5, false);
 
         let proof = rollup_and_prove(&mut state, &signed_txs);
-        assert!(proof.is_none());
+        assert!(proof.is_err());
     }
 }
