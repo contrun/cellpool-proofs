@@ -31,10 +31,10 @@ pub fn rollup_and_prove(
         .ok_or(ProofError::Rollup)?;
 
     let mut rng = ark_std::test_rng();
-    let (pk, vk) = Groth16::<Bls12_381>::circuit_specific_setup(rollup.clone(), &mut rng)
+    let (pk, vk) = Groth16::<Bls12_381>::circuit_specific_setup(&rollup, &mut rng)
         .map_err(ProofError::ProvingEngine)?;
 
-    let proof = Groth16::prove(&pk, rollup, &mut rng).map_err(ProofError::ProvingEngine)?;
+    let proof = Groth16::prove(&pk, &rollup, &mut rng).map_err(ProofError::ProvingEngine)?;
     Ok(Proof { proof, vk })
 }
 
