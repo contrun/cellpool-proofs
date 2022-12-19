@@ -60,7 +60,7 @@ impl Rollup {
         }
     }
 
-    pub fn new_with_parmas(ledger_params: Parameters) -> Self {
+    pub fn new_with_params(ledger_params: Parameters) -> Self {
         Self {
             ledger_params,
             initial_root: None,
