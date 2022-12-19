@@ -1,4 +1,4 @@
-use crate::ledger::{AccRoot, Parameters, State};
+use crate::ledger::{AccRoot, Amount, Parameters, State};
 use crate::rollup::Rollup;
 use crate::transaction::{get_transactions_hash, SignedTransaction, Transaction};
 use crate::ConstraintF;
@@ -10,16 +10,31 @@ use ark_snark::SNARK;
 pub fn rollup_and_prove(
     state: &mut State,
     transactions: &[SignedTransaction],
-) -> Option<Proof<Bls12_381>> {
+) -> Option<(
+    Proof<Bls12_381>,
+    <Groth16<Bls12_381> as SNARK<ConstraintF>>::VerifyingKey,
+)> {
     let rollup = state.rollup_transactions(transactions, true, true)?;
 
     let mut rng = ark_std::test_rng();
-    let pk = get_proving_key(&state.parameters);
+    let (pk, vk) = Groth16::<Bls12_381>::circuit_specific_setup(rollup.clone(), &mut rng).unwrap();
 
     // Use the same circuit but with different inputs to verify against
     // This test checks that the SNARK passes on the provided input
-    let proof = Groth16::prove(&pk, rollup, &mut rng).unwrap();
-    Some(proof)
+    let proof = Groth16::prove(&pk, rollup.clone(), &mut rng).unwrap();
+    Some((proof, vk))
+}
+
+pub fn verify(
+    _params: &Parameters,
+    vk: <Groth16<Bls12_381> as SNARK<ConstraintF>>::VerifyingKey,
+    proof: &Proof<Bls12_381>,
+    initial_root: AccRoot,
+    final_root: AccRoot,
+    transactions: &[Transaction],
+) -> Result<bool, <Groth16<Bls12_381> as SNARK<ConstraintF>>::Error> {
+    let public_inputs = get_public_inputs(initial_root, final_root, transactions);
+    Groth16::verify(&vk, &public_inputs, proof)
 }
 
 pub fn get_public_inputs(
@@ -36,40 +51,6 @@ pub fn get_public_inputs(
     result.push(final_root);
     result.extend(transaction_fields);
     result
-}
-
-pub fn verify(
-    params: &Parameters,
-    proof: &Proof<Bls12_381>,
-    initial_root: AccRoot,
-    final_root: AccRoot,
-    transactions: &[Transaction],
-) -> Result<bool, <Groth16<Bls12_381> as SNARK<ConstraintF>>::Error> {
-    let public_inputs = get_public_inputs(initial_root, final_root, transactions);
-    let vk = get_verifying_key(params);
-    Groth16::verify(&vk, &public_inputs, proof)
-}
-
-fn get_verifying_key(
-    params: &Parameters,
-) -> <Groth16<Bls12_381> as SNARK<ConstraintF>>::VerifyingKey {
-    let mut rng = ark_std::test_rng();
-    let (_pk, vk) = Groth16::<Bls12_381>::circuit_specific_setup(
-        Rollup::new_with_params(params.clone()),
-        &mut rng,
-    )
-    .unwrap();
-    vk
-}
-
-fn get_proving_key(params: &Parameters) -> <Groth16<Bls12_381> as SNARK<ConstraintF>>::ProvingKey {
-    let mut rng = ark_std::test_rng();
-    let (pk, _vk) = Groth16::<Bls12_381>::circuit_specific_setup(
-        Rollup::new_with_params(params.clone()),
-        &mut rng,
-    )
-    .unwrap();
-    pk
 }
 
 #[cfg(test)]
@@ -123,11 +104,18 @@ mod test {
         let (mut state, txs, signed_txs) = build_n_transactions(2, 100);
 
         let initial_root = state.root();
-        let proof = rollup_and_prove(&mut state, &signed_txs).expect("Must create proof");
+        let (proof, vk) = rollup_and_prove(&mut state, &signed_txs).expect("Must create proof");
 
         let final_root = state.root();
-        let is_valid_proof = verify(&state.parameters, &proof, initial_root, final_root, &txs)
-            .expect("Must verify proof");
+        let is_valid_proof = verify(
+            &state.parameters,
+            vk,
+            &proof,
+            initial_root,
+            final_root,
+            &txs,
+        )
+        .expect("Must verify proof");
         assert!(is_valid_proof);
     }
 }

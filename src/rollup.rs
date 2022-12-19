@@ -14,6 +14,7 @@ use crate::{
 use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
+#[derive(Clone)]
 pub struct Rollup {
     /// The ledger parameters.
     pub ledger_params: Parameters,
