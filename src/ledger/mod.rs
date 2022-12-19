@@ -243,58 +243,6 @@ impl State {
             create_non_existent_accounts,
         )
     }
-
-    pub fn rollup_and_prove(
-        &mut self,
-        transactions: &[SignedTransaction],
-    ) -> Option<Proof<Bls12_381>> {
-        let rollup = self.rollup_transactions(transactions, true, true)?;
-
-        let mut rng = ark_std::test_rng();
-        let (pk, _vk) = Groth16::<Bls12_381>::circuit_specific_setup(
-            Rollup::new_with_params(self.parameters.clone()),
-            &mut rng,
-        )
-        .unwrap();
-
-        // Use the same circuit but with different inputs to verify against
-        // This test checks that the SNARK passes on the provided input
-        let proof = Groth16::prove(&pk, rollup, &mut rng).unwrap();
-        Some(proof)
-    }
-}
-
-pub fn get_verifying_key(
-    params: &Parameters,
-) -> <Groth16<Bls12_381> as SNARK<ConstraintF>>::VerifyingKey {
-    let mut rng = ark_std::test_rng();
-    let (_pk, vk) = Groth16::<Bls12_381>::circuit_specific_setup(
-        Rollup::new_with_params(params.clone()),
-        &mut rng,
-    )
-    .unwrap();
-    vk
-}
-
-pub fn get_proving_key(
-    params: &Parameters,
-) -> <Groth16<Bls12_381> as SNARK<ConstraintF>>::ProvingKey {
-    let mut rng = ark_std::test_rng();
-    let (pk, _vk) = Groth16::<Bls12_381>::circuit_specific_setup(
-        Rollup::new_with_params(params.clone()),
-        &mut rng,
-    )
-    .unwrap();
-    pk
-}
-
-pub fn verify(
-    params: &Parameters,
-    public_input: &[ConstraintF],
-    proof: &Proof<Bls12_381>,
-) -> Result<bool, <Groth16<Bls12_381> as SNARK<ConstraintF>>::Error> {
-    let vk = get_verifying_key(params);
-    Groth16::verify(&vk, public_input, proof)
 }
 
 #[cfg(test)]

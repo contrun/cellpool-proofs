@@ -10,5 +10,8 @@ pub mod signature;
 
 pub mod rollup;
 
+mod proofs;
+pub use proofs::*;
+
 extern crate ark_crypto_primitives;
 extern crate derivative;
