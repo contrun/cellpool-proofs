@@ -13,7 +13,6 @@ use crate::{
 use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
-#[derive(Clone)]
 pub struct Rollup {
     /// The ledger parameters.
     pub ledger_params: Parameters,
@@ -96,7 +95,7 @@ impl Rollup {
     }
 }
 
-impl ConstraintSynthesizer<ConstraintF> for Rollup {
+impl ConstraintSynthesizer<ConstraintF> for &Rollup {
     #[tracing::instrument(target = "r1cs", skip(self, cs))]
     fn generate_constraints(
         self,
@@ -412,19 +411,18 @@ mod test {
         use ark_bls12_381::Bls12_381;
         use ark_groth16::Groth16;
         use ark_snark::SNARK;
-        // Use a circuit just to generate the circuit
-        let circuit_defining_cs = build_two_tx_circuit();
 
         let mut rng = ark_std::test_rng();
-        let (pk, vk) =
-            Groth16::<Bls12_381>::circuit_specific_setup(circuit_defining_cs, &mut rng).unwrap();
-
         // Use the same circuit but with different inputs to verify against
         // This test checks that the SNARK passes on the provided input
         let circuit_to_verify_against = build_two_tx_circuit();
+        let (pk, vk) =
+            Groth16::<Bls12_381>::circuit_specific_setup(&circuit_to_verify_against, &mut rng)
+                .unwrap();
+
         let public_input = circuit_to_verify_against.must_get_public_inputs();
 
-        let proof = Groth16::prove(&pk, circuit_to_verify_against, &mut rng).unwrap();
+        let proof = Groth16::prove(&pk, &circuit_to_verify_against, &mut rng).unwrap();
         let valid_proof = Groth16::verify(&vk, &public_input, &proof).unwrap();
         assert!(valid_proof);
 
@@ -435,7 +433,7 @@ mod test {
         let mut public_input = circuit_to_verify_against.must_get_public_inputs();
         public_input[0] = public_input[1];
 
-        let proof = Groth16::prove(&pk, circuit_to_verify_against, &mut rng).unwrap();
+        let proof = Groth16::prove(&pk, &circuit_to_verify_against, &mut rng).unwrap();
         let valid_proof = Groth16::verify(&vk, &public_input, &proof).unwrap();
         assert!(!valid_proof);
     }
