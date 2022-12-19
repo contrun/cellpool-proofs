@@ -24,6 +24,8 @@ digest = "0.9"
 tracing = { version = "0.1", default-features = false, features = [ "attributes" ] }
 tracing-subscriber = { version = "0.2" }
 derivative = { version = "2.0", features = ["use_core"] }
+anyhow = { version = "1.0.68", default-features = false }
+thiserror = { version = "1.0.38", default-features = false }
 
 [features]
 default = [ "std", "parallel", "r1cs" ]
