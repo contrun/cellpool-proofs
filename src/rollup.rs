@@ -109,8 +109,8 @@ impl<const NUM_TX: usize> Rollup<NUM_TX> {
             }
         }
         for tx in transactions {
-            let sender_id = tx.sender;
-            let recipient_id = tx.recipient;
+            let sender_id = tx.sender();
+            let recipient_id = tx.recipient();
             let sender_pre_acc_info = *state.id_to_account_info.get(&sender_id)?;
             let sender_pre_path = state
                 .account_merkle_tree

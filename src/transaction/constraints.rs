@@ -193,8 +193,8 @@ impl UnaryRollup {
         }
 
         let initial_root = state.root();
-        let sender_id = transaction.sender;
-        let recipient_id = transaction.recipient;
+        let sender_id = transaction.sender();
+        let recipient_id = transaction.recipient();
 
         let sender_acc_info = *state.id_to_account_info.get(&sender_id)?;
         let sender_pre_path = state

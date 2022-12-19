@@ -18,7 +18,7 @@ pub mod constraints;
 pub use constraints::*;
 
 /// Transaction transferring some amount from one account to another.
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct Transaction {
     /// The account information of the sender.
     pub sender: AccountId,
@@ -38,6 +38,14 @@ impl Transaction {
         ]
         .unwrap()
     }
+
+    pub fn new(sender: AccountId, recipient: AccountId, amount: Amount) -> Self {
+        Self {
+            sender,
+            recipient,
+            amount,
+        }
+    }
 }
 
 pub fn get_transactions_hash(transactions: &[Transaction]) -> [u8; 32] {
@@ -51,12 +59,7 @@ pub fn get_transactions_hash(transactions: &[Transaction]) -> [u8; 32] {
 /// Transaction transferring some amount from one account to another.
 #[derive(Clone, Debug)]
 pub struct SignedTransaction {
-    /// The account information of the sender.
-    pub sender: AccountId,
-    /// The account information of the recipient.
-    pub recipient: AccountId,
-    /// The amount being transferred from the sender to the receiver.
-    pub amount: Amount,
+    transaction: Transaction,
     /// The spend authorization is a signature over the sender, the recipient,
     /// and the amount.
     pub signature: Signature,
@@ -64,25 +67,29 @@ pub struct SignedTransaction {
 
 impl From<SignedTransaction> for Transaction {
     fn from(signed_transaction: SignedTransaction) -> Transaction {
-        Transaction {
-            sender: signed_transaction.sender,
-            recipient: signed_transaction.recipient,
-            amount: signed_transaction.amount,
-        }
+        (&signed_transaction).into()
     }
 }
 
 impl From<&SignedTransaction> for Transaction {
     fn from(signed_transaction: &SignedTransaction) -> Transaction {
-        Transaction {
-            sender: signed_transaction.sender,
-            recipient: signed_transaction.recipient,
-            amount: signed_transaction.amount,
-        }
+        signed_transaction.transaction
     }
 }
 
 impl SignedTransaction {
+    pub fn sender(&self) -> AccountId {
+        self.transaction.sender
+    }
+
+    pub fn recipient(&self) -> AccountId {
+        self.transaction.recipient
+    }
+
+    pub fn amount(&self) -> Amount {
+        self.transaction.amount
+    }
+
     /// Verify just the signature in the transaction.
     fn verify_signature(
         &self,
@@ -91,9 +98,7 @@ impl SignedTransaction {
     ) -> bool {
         // The authorized message consists of
         // (SenderAccId || SenderPubKey || RecipientAccId || RecipientPubKey || Amount)
-        let mut message = self.sender.to_bytes_le();
-        message.extend(self.recipient.to_bytes_le());
-        message.extend(self.amount.to_bytes_le());
+        let message = self.transaction.to_bytes_le();
         Schnorr::verify(pp, pub_key, &message, &self.signature).unwrap()
     }
 
@@ -106,13 +111,13 @@ impl SignedTransaction {
     /// 3. Verify that the recipient's account exists.
     pub fn validate(&self, parameters: &ledger::Parameters, state: &ledger::State) -> bool {
         // Lookup public key corresponding to sender ID
-        if let Some(sender_acc_info) = state.id_to_account_info.get(&self.sender) {
+        if let Some(sender_acc_info) = state.id_to_account_info.get(&self.sender()) {
             let mut result = true;
             // Check that the account_info exists in the Merkle tree.
             result &= {
                 let path = state
                     .account_merkle_tree
-                    .generate_proof(self.sender.0 as usize)
+                    .generate_proof(self.sender().0 as usize)
                     .expect("path should exist");
                 path.verify(
                     &parameters.leaf_crh_params,
@@ -126,9 +131,9 @@ impl SignedTransaction {
             result &= self.verify_signature(&parameters.sig_params, &sender_acc_info.public_key);
             // assert!(result, "signature verification failed");
             // Verify the amount is available in the sender account.
-            result &= self.amount <= sender_acc_info.balance;
+            result &= self.amount() <= sender_acc_info.balance;
             // Verify that recipient account exists.
-            result &= state.id_to_account_info.get(&self.recipient).is_some();
+            result &= state.id_to_account_info.get(&self.recipient()).is_some();
             result
         } else {
             false
@@ -145,14 +150,11 @@ impl SignedTransaction {
         rng: &mut R,
     ) -> Self {
         // The authorized message consists of (SenderAccId || RecipientAccId || Amount)
-        let mut message = sender.to_bytes_le();
-        message.extend(recipient.to_bytes_le());
-        message.extend(amount.to_bytes_le());
+        let transaction = Transaction::new(sender, recipient, amount);
+        let message = transaction.to_bytes_le();
         let signature = Schnorr::sign(&parameters.sig_params, sender_sk, &message, rng).unwrap();
         Self {
-            sender,
-            recipient,
-            amount,
+            transaction,
             signature,
         }
     }

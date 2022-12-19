@@ -178,12 +178,12 @@ impl State {
     /// Update the state by applying the transaction `tx`, if `tx` is valid.
     pub fn apply_transaction(&mut self, pp: &Parameters, tx: &SignedTransaction) -> Option<()> {
         if tx.validate(pp, self) {
-            let old_sender_bal = self.id_to_account_info.get(&tx.sender)?.balance;
-            let old_receiver_bal = self.id_to_account_info.get(&tx.recipient)?.balance;
-            let new_sender_bal = old_sender_bal.checked_sub(tx.amount)?;
-            let new_receiver_bal = old_receiver_bal.checked_add(tx.amount)?;
-            self.update_balance(tx.sender, new_sender_bal);
-            self.update_balance(tx.recipient, new_receiver_bal);
+            let old_sender_bal = self.id_to_account_info.get(&tx.sender())?.balance;
+            let old_receiver_bal = self.id_to_account_info.get(&tx.recipient())?.balance;
+            let new_sender_bal = old_sender_bal.checked_sub(tx.amount())?;
+            let new_receiver_bal = old_receiver_bal.checked_add(tx.amount())?;
+            self.update_balance(tx.sender(), new_sender_bal);
+            self.update_balance(tx.recipient(), new_receiver_bal);
             Some(())
         } else {
             None
