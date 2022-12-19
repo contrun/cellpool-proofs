@@ -1,6 +1,6 @@
 use super::{Signature, SignedTransaction, Transaction};
 use crate::account::AccountInformation;
-use crate::account::{AccountIdVar, AccountInformationVar, AccountPublicKeyVar};
+use crate::account::{AccountInformationVar, AccountPublicKeyVar};
 use crate::ledger::{self, AccPathVar, AccRootVar, AmountVar, ParametersVar};
 use crate::ledger::{AccPath, AccRoot, Parameters, State};
 use crate::signature::constraints::SigVerifyGadget;
@@ -17,9 +17,9 @@ use std::borrow::Borrow;
 /// Transaction transferring some amount from one account to another.
 pub struct TransactionVar {
     /// The account information of the sender.
-    pub sender: AccountIdVar,
+    pub sender: AccountPublicKeyVar,
     /// The account information of the recipient.
-    pub recipient: AccountIdVar,
+    pub recipient: AccountPublicKeyVar,
     /// The amount being transferred from the sender to the receiver.
     pub amount: AmountVar,
     /// The fee being collected by the miner.
@@ -29,8 +29,15 @@ pub struct TransactionVar {
 impl TransactionVar {
     /// Convert the transaction information to bytes.
     pub fn to_bytes_le(&self) -> Vec<UInt8<ConstraintF>> {
-        let mut message = self.sender.to_bytes_le();
-        message.extend(self.recipient.to_bytes_le());
+        let mut message = self
+            .sender
+            .to_bytes()
+            .expect("Must serialize AccountPublicKeyVar");
+        message.extend(
+            self.recipient
+                .to_bytes()
+                .expect("Must serialize AccountPublicKeyVar"),
+        );
         message.extend(self.amount.to_bytes_le());
         message.extend(self.fee.to_bytes_le());
         message
@@ -149,8 +156,9 @@ impl AllocVar<Transaction, ConstraintF> for TransactionVar {
         let cs = cs.into();
         f().and_then(|tx| {
             let tx: &Transaction = tx.borrow();
-            let sender = AccountIdVar::new_variable(cs.clone(), || Ok(&tx.sender), mode)?;
-            let recipient = AccountIdVar::new_variable(cs.clone(), || Ok(&tx.recipient), mode)?;
+            let sender = AccountPublicKeyVar::new_variable(cs.clone(), || Ok(&tx.sender), mode)?;
+            let recipient =
+                AccountPublicKeyVar::new_variable(cs.clone(), || Ok(&tx.recipient), mode)?;
             let amount = AmountVar::new_variable(cs.clone(), || Ok(&tx.amount), mode)?;
             let fee = AmountVar::new_variable(cs.clone(), || Ok(&tx.fee), mode)?;
             Ok(Self {
@@ -205,16 +213,16 @@ impl UnaryRollup {
         let sender_id = transaction.sender();
         let recipient_id = transaction.recipient();
 
-        let sender_acc_info = *state.id_to_account_info.get(&sender_id)?;
+        let sender_acc_info = state.get_account_information_from_pk(&sender_id)?;
         let sender_pre_path = state
             .account_merkle_tree
-            .generate_proof(sender_id.0 as usize)
+            .generate_proof(sender_acc_info.id.0 as usize)
             .unwrap();
 
-        let recv_acc_info = *state.id_to_account_info.get(&recipient_id)?;
+        let recv_acc_info = state.get_account_information_from_pk(&recipient_id)?;
         let recv_pre_path = state
             .account_merkle_tree
-            .generate_proof(recipient_id.0 as usize)
+            .generate_proof(recv_acc_info.id.0 as usize)
             .unwrap();
 
         if validate {
@@ -226,11 +234,11 @@ impl UnaryRollup {
         let final_root = state.root();
         let sender_post_path = state
             .account_merkle_tree
-            .generate_proof(sender_id.0 as usize)
+            .generate_proof(sender_acc_info.id.0 as usize)
             .unwrap();
         let recv_post_path = state
             .account_merkle_tree
-            .generate_proof(recipient_id.0 as usize)
+            .generate_proof(recv_acc_info.id.0 as usize)
             .unwrap();
 
         Some(UnaryRollup {
@@ -355,18 +363,17 @@ mod test {
         let pp = Parameters::sample(&mut rng);
         let mut state = State::new(32, &pp);
         // Let's make an account for Alice.
-        let (alice_id, _alice_pk, alice_sk) =
-            state.sample_keys_and_register(&pp, &mut rng).unwrap();
+        let (alice_id, alice_pk, alice_sk) = state.sample_keys_and_register(&pp, &mut rng).unwrap();
         // Let's give her some initial balance to start with.
         state
-            .update_balance(alice_id, Amount(20))
+            .update_balance_by_id(&alice_id, Amount(20))
             .expect("Alice's account should exist");
         // Let's make an account for Bob.
-        let (bob_id, _bob_pk, bob_sk) = state.sample_keys_and_register(&pp, &mut rng).unwrap();
+        let (_bob_id, bob_pk, bob_sk) = state.sample_keys_and_register(&pp, &mut rng).unwrap();
 
         // Alice wants to transfer 5 units to Bob.
         let mut temp_state = state.clone();
-        let tx1 = SignedTransaction::create(&pp, alice_id, bob_id, Amount(5), &alice_sk, &mut rng);
+        let tx1 = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &alice_sk, &mut rng);
         assert!(tx1.validate(&pp, &temp_state));
         let rollup =
             UnaryRollup::with_state_and_transaction(pp.clone(), tx1, &mut temp_state, true)
@@ -374,7 +381,7 @@ mod test {
         assert!(test_cs(rollup));
 
         let mut temp_state = state.clone();
-        let bad_tx = SignedTransaction::create(&pp, alice_id, bob_id, Amount(5), &bob_sk, &mut rng);
+        let bad_tx = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &bob_sk, &mut rng);
         assert!(!bad_tx.validate(&pp, &temp_state));
         assert!(matches!(temp_state.apply_transaction(&pp, &bad_tx), None));
         let rollup =

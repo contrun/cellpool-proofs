@@ -10,4 +10,5 @@ pub mod signature;
 
 pub mod rollup;
 
+extern crate ark_crypto_primitives;
 extern crate derivative;

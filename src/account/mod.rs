@@ -1,6 +1,8 @@
 use super::ledger::*;
 use super::signature::schnorr;
+
 use ark_ed_on_bls12_381::EdwardsProjective;
+use ark_serialize::CanonicalSerialize;
 
 #[cfg(feature = "r1cs")]
 pub mod constraints;
@@ -11,6 +13,27 @@ pub use constraints::*;
 pub type AccountPublicKey = schnorr::PublicKey<EdwardsProjective>;
 /// Account secret key used to create transaction signatures.
 pub type AccountSecretKey = schnorr::SecretKey<EdwardsProjective>;
+
+pub fn get_public_key_bytes(pk: &AccountPublicKey) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    pk.serialize_uncompressed(&mut bytes)
+        .expect("Must serialize public key");
+    bytes
+}
+
+/// A special account for minting and burning assets.
+/// Assets transferring from this account is regardded as minted,
+/// while assets transferring to this account is regarded as burend.
+pub fn sentinel_account() -> AccountPublicKey {
+    use ark_ec::AffineCurve;
+    AccountPublicKey::prime_subgroup_generator()
+}
+
+#[cfg(test)]
+pub fn non_existent_account() -> AccountPublicKey {
+    use ark_ec::AffineCurve;
+    AccountPublicKey::prime_subgroup_generator().mul(42).into()
+}
 
 /// Account identifier. This prototype supports only 256 accounts at a time.
 #[derive(Hash, Eq, PartialEq, Copy, Clone, Ord, PartialOrd, Debug)]
@@ -34,6 +57,8 @@ impl AccountId {
 /// Information about the account, such as the balance and the associated public key.
 #[derive(Hash, Eq, PartialEq, Copy, Clone)]
 pub struct AccountInformation {
+    /// The account public key.
+    pub id: AccountId,
     /// The account public key.
     pub public_key: AccountPublicKey,
     /// The balance associated with this this account.

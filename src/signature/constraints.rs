@@ -5,6 +5,7 @@ use ark_relations::r1cs::SynthesisError;
 
 use super::SignatureScheme;
 pub type SignatureVar = super::schnorr::constraints::SignatureVar<EdwardsProjective, EdwardsVar>;
+pub type PublicKeyVar = super::schnorr::constraints::PublicKeyVar<EdwardsProjective, EdwardsVar>;
 
 pub trait SigVerifyGadget<S: SignatureScheme, ConstraintF: Field> {
     type ParametersVar: AllocVar<S::Parameters, ConstraintF> + Clone;

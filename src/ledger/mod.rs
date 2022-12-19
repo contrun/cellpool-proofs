@@ -135,6 +135,7 @@ impl State {
         self.next_available_account.and_then(|id| {
             // Construct account information for the new account.
             let account_info = AccountInformation {
+                id,
                 public_key,
                 balance: Amount(0),
             };
@@ -166,35 +167,63 @@ impl State {
     /// Update the balance of `id` to `new_amount`.
     /// Returns `Some(())` if an account with identifier `id` exists already, and `None`
     /// otherwise.
-    pub fn update_balance(&mut self, id: AccountId, new_amount: Amount) -> Option<()> {
+    pub fn update_balance_by_id(&mut self, id: &AccountId, new_amount: Amount) -> Option<()> {
         let tree = &mut self.account_merkle_tree;
-        self.id_to_account_info.get_mut(&id).map(|account_info| {
+        self.id_to_account_info.get_mut(id).map(|account_info| {
             account_info.balance = new_amount;
             tree.update(id.0 as usize, &account_info.to_bytes_le())
                 .expect("should exist");
         })
     }
 
+    /// Update the balance of `id` to `new_amount`.
+    /// Returns `Some(())` if an account with identifier `id` exists already, and `None`
+    /// otherwise.
+    pub fn update_balance_by_pk(
+        &mut self,
+        pk: &AccountPublicKey,
+        new_amount: Amount,
+    ) -> Option<()> {
+        self.get_account_information_from_pk(pk)
+            .and_then(|acc| self.update_balance_by_id(&acc.id, new_amount))
+    }
+
     /// Update the state by applying the transaction `tx`, if `tx` is valid.
     pub fn apply_transaction(&mut self, pp: &Parameters, tx: &SignedTransaction) -> Option<()> {
         if tx.validate(pp, self) {
-            let old_sender_bal = self.id_to_account_info.get(&tx.sender())?.balance;
-            let old_receiver_bal = self.id_to_account_info.get(&tx.recipient())?.balance;
+            let old_sender_bal = self.get_account_information_from_pk(&tx.sender())?.balance;
+            let old_receiver_bal = self
+                .get_account_information_from_pk(&tx.recipient())?
+                .balance;
             let new_sender_bal = old_sender_bal.checked_sub(tx.amount())?;
             let new_receiver_bal = old_receiver_bal.checked_add(tx.amount())?;
-            self.update_balance(tx.sender(), new_sender_bal);
-            self.update_balance(tx.recipient(), new_receiver_bal);
+            self.update_balance_by_pk(&tx.sender(), new_sender_bal);
+            self.update_balance_by_pk(&tx.recipient(), new_receiver_bal);
             Some(())
         } else {
             None
         }
+    }
+
+    pub fn get_account_information_from_id(&self, id: &AccountId) -> Option<AccountInformation> {
+        self.id_to_account_info.get(id).copied()
+    }
+
+    pub fn get_account_information_from_pk(
+        &self,
+        pk: &AccountPublicKey,
+    ) -> Option<AccountInformation> {
+        self.pub_key_to_id
+            .get(pk)
+            .and_then(|id| self.get_account_information_from_id(id))
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::SignedTransaction;
-    use super::{AccountId, Amount, Parameters, State};
+    use super::{Amount, Parameters, State};
+    
 
     #[test]
     fn end_to_end() {
@@ -202,33 +231,38 @@ mod test {
         let pp = Parameters::sample(&mut rng);
         let mut state = State::new(32, &pp);
         // Let's make an account for Alice.
-        let (alice_id, _alice_pk, alice_sk) =
-            state.sample_keys_and_register(&pp, &mut rng).unwrap();
+        let (alice_id, alice_pk, alice_sk) = state.sample_keys_and_register(&pp, &mut rng).unwrap();
         // Let's give her some initial balance to start with.
         state
-            .update_balance(alice_id, Amount(10))
+            .update_balance_by_id(&alice_id, Amount(10))
             .expect("Alice's account should exist");
         // Let's make an account for Bob.
-        let (bob_id, _bob_pk, bob_sk) = state.sample_keys_and_register(&pp, &mut rng).unwrap();
+        let (_bob_id, bob_pk, bob_sk) = state.sample_keys_and_register(&pp, &mut rng).unwrap();
 
         // Alice wants to transfer 5 units to Bob.
-        let tx1 = SignedTransaction::create(&pp, alice_id, bob_id, Amount(5), &alice_sk, &mut rng);
+        let tx1 = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &alice_sk, &mut rng);
         assert!(tx1.validate(&pp, &state));
         state.apply_transaction(&pp, &tx1).expect("should work");
         // Let's try creating invalid transactions:
         // First, let's try a transaction where the amount is larger than Alice's balance.
         let bad_tx =
-            SignedTransaction::create(&pp, alice_id, bob_id, Amount(6), &alice_sk, &mut rng);
+            SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(6), &alice_sk, &mut rng);
         assert!(!bad_tx.validate(&pp, &state));
         assert!(matches!(state.apply_transaction(&pp, &bad_tx), None));
         // Next, let's try a transaction where the signature is incorrect:
-        let bad_tx = SignedTransaction::create(&pp, alice_id, bob_id, Amount(5), &bob_sk, &mut rng);
+        let bad_tx = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &bob_sk, &mut rng);
         assert!(!bad_tx.validate(&pp, &state));
         assert!(matches!(state.apply_transaction(&pp, &bad_tx), None));
 
         // Finally, let's try a transaction to an non-existant account:
-        let bad_tx =
-            SignedTransaction::create(&pp, alice_id, AccountId(10), Amount(5), &alice_sk, &mut rng);
+        let bad_tx = SignedTransaction::create(
+            &pp,
+            alice_pk,
+            crate::account::non_existent_account(),
+            Amount(5),
+            &alice_sk,
+            &mut rng,
+        );
         assert!(!bad_tx.validate(&pp, &state));
         assert!(matches!(state.apply_transaction(&pp, &bad_tx), None));
     }

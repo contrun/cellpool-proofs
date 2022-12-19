@@ -1,9 +1,10 @@
+use crate::account::get_public_key_bytes;
 use crate::signature::Signature;
 
 use crate::random_oracle::blake2s::RO;
 use crate::random_oracle::RandomOracle;
 
-use super::account::{AccountId, AccountPublicKey, AccountSecretKey};
+use super::account::{AccountPublicKey, AccountSecretKey};
 use super::ledger::{self, Amount};
 use super::signature::{
     schnorr::{self, Schnorr},
@@ -21,9 +22,9 @@ pub use constraints::*;
 #[derive(Copy, Clone, Debug)]
 pub struct Transaction {
     /// The account information of the sender.
-    pub sender: AccountId,
+    pub sender: AccountPublicKey,
     /// The account information of the recipient.
-    pub recipient: AccountId,
+    pub recipient: AccountPublicKey,
     /// The amount being transferred from the sender to the receiver.
     pub amount: Amount,
     /// The fee being collected by the miner.
@@ -34,15 +35,15 @@ impl Transaction {
     /// Convert the transaction information to bytes.
     pub fn to_bytes_le(&self) -> Vec<u8> {
         ark_ff::to_bytes![
-            self.sender.to_bytes_le(),
-            self.recipient.to_bytes_le(),
+            get_public_key_bytes(&self.sender),
+            get_public_key_bytes(&self.recipient),
             self.amount.to_bytes_le(),
             self.fee.to_bytes_le()
         ]
         .unwrap()
     }
 
-    pub fn new(sender: AccountId, recipient: AccountId, amount: Amount) -> Self {
+    pub fn new(sender: AccountPublicKey, recipient: AccountPublicKey, amount: Amount) -> Self {
         Self {
             sender,
             recipient,
@@ -82,11 +83,11 @@ impl From<&SignedTransaction> for Transaction {
 }
 
 impl SignedTransaction {
-    pub fn sender(&self) -> AccountId {
+    pub fn sender(&self) -> AccountPublicKey {
         self.transaction.sender
     }
 
-    pub fn recipient(&self) -> AccountId {
+    pub fn recipient(&self) -> AccountPublicKey {
         self.transaction.recipient
     }
 
@@ -119,13 +120,13 @@ impl SignedTransaction {
     /// 3. Verify that the recipient's account exists.
     pub fn validate(&self, parameters: &ledger::Parameters, state: &ledger::State) -> bool {
         // Lookup public key corresponding to sender ID
-        if let Some(sender_acc_info) = state.id_to_account_info.get(&self.sender()) {
+        if let Some(sender_acc_info) = state.get_account_information_from_pk(&self.sender()) {
             let mut result = true;
             // Check that the account_info exists in the Merkle tree.
             result &= {
                 let path = state
                     .account_merkle_tree
-                    .generate_proof(self.sender().0 as usize)
+                    .generate_proof(sender_acc_info.id.0 as usize)
                     .expect("path should exist");
                 path.verify(
                     &parameters.leaf_crh_params,
@@ -141,7 +142,9 @@ impl SignedTransaction {
             // Verify the amount is available in the sender account.
             result &= self.amount() <= sender_acc_info.balance;
             // Verify that recipient account exists.
-            result &= state.id_to_account_info.get(&self.recipient()).is_some();
+            result &= state
+                .get_account_information_from_pk(&self.recipient())
+                .is_some();
             result
         } else {
             false
@@ -151,8 +154,8 @@ impl SignedTransaction {
     /// Create a (possibly invalid) transaction.
     pub fn create<R: Rng>(
         parameters: &ledger::Parameters,
-        sender: AccountId,
-        recipient: AccountId,
+        sender: AccountPublicKey,
+        recipient: AccountPublicKey,
         amount: Amount,
         sender_sk: &AccountSecretKey,
         rng: &mut R,

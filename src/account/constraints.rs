@@ -1,19 +1,16 @@
 use super::*;
-use crate::signature::schnorr::constraints::*;
 use crate::ConstraintF;
-use ark_ed_on_bls12_381::{constraints::EdwardsVar, EdwardsProjective};
 use ark_r1cs_std::bits::{uint16::UInt16, ToBytesGadget};
 use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{Namespace, SynthesisError};
 use std::borrow::Borrow;
 
-/// Account public key used to verify transaction signatures.
-pub type AccountPublicKeyVar = PublicKeyVar<EdwardsProjective, EdwardsVar>;
-
 /// Account identifier. This prototype supports only 256 accounts at a time.
 #[derive(Clone, Debug)]
 pub struct AccountIdVar(pub WrappedAccountIdVar<ConstraintF>);
 type WrappedAccountIdVar<F> = UInt16<F>;
+
+pub use crate::signature::constraints::PublicKeyVar as AccountPublicKeyVar;
 
 impl AccountIdVar {
     /// Convert the account identifier to bytes.
