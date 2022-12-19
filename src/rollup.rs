@@ -1,7 +1,10 @@
 use crate::account::AccountInformationVar;
 use crate::ledger::*;
+use crate::random_oracle::blake2s::constraints::ROGadget;
+use crate::random_oracle::blake2s::RO;
+use crate::random_oracle::constraints::RandomOracleGadget;
 use crate::signature::{Signature, SignatureVar};
-use crate::transaction::{Transaction, TransactionVar};
+use crate::transaction::{get_transactions_hash, Transaction, TransactionVar};
 use crate::ConstraintF;
 use crate::{
     account::AccountInformation,
@@ -53,6 +56,18 @@ impl<const NUM_TX: usize> Rollup<NUM_TX> {
             recv_post_paths: None,
             post_tx_roots: None,
         }
+    }
+
+    // TODO: Gather all public inputs here.
+    pub fn get_public_inputs(&self) -> Option<Vec<ConstraintF>> {
+        // [
+        //     circuit_to_verify_against.final_root.unwrap(),
+        //     circuit_to_verify_against.final_root.unwrap(),
+        //     get_transactions_hash(&circuit_to_verify_against.transactions.as_ref().unwrap())
+        //         .to_field_elements()
+        //         .unwrap()[0],
+        // ]
+        None
     }
 
     pub fn only_initial_and_final_roots(
@@ -163,6 +178,40 @@ impl<const NUM_TX: usize> ConstraintSynthesizer<ConstraintF> for Rollup<NUM_TX> 
             self.final_root.ok_or(SynthesisError::AssignmentMissing)
         })?;
 
+        let transaction_list = self
+            .transactions
+            .as_ref()
+            .ok_or(SynthesisError::AssignmentMissing)?;
+
+        let transactions_hash = get_transactions_hash(transaction_list);
+        // Declare the final root as a public input.
+        let transactions = ark_crypto_primitives::prf::blake2s::constraints::OutputVar::new_input(
+            ark_relations::ns!(cs, "Transactions"),
+            || Ok(&transactions_hash),
+        )?;
+
+        let mut hash_input_var = vec![];
+        for transaction in transaction_list {
+            for byte in transaction.to_bytes_le() {
+                hash_input_var.push(UInt8::new_witness(cs.clone(), || Ok(byte)).unwrap());
+            }
+        }
+
+        let ro_parameters = ();
+        let ro_parameters_var =
+            <ROGadget as RandomOracleGadget<RO, ConstraintF>>::ParametersVar::new_witness(
+                ark_relations::ns!(cs, "RandomOracle Parameters"),
+                || Ok(&ro_parameters),
+            )
+            .unwrap();
+        let hash_result_var = <ROGadget as RandomOracleGadget<RO, ConstraintF>>::evaluate(
+            &ro_parameters_var,
+            &hash_input_var,
+        )
+        .unwrap();
+
+        transactions.enforce_equal(&hash_result_var)?;
+
         let mut prev_root = initial_root;
 
         for i in 0..NUM_TX {
@@ -258,6 +307,7 @@ mod test {
     use crate::account::AccountId;
     use crate::ledger::{Amount, Parameters, State};
     use crate::transaction::SignedTransaction;
+    use ark_ff::ToConstraintField;
     use ark_relations::r1cs::{
         ConstraintLayer, ConstraintSynthesizer, ConstraintSystem, TracingMode::OnlyConstraints,
     };
@@ -459,6 +509,9 @@ mod test {
         let public_input = [
             circuit_to_verify_against.initial_root.unwrap(),
             circuit_to_verify_against.final_root.unwrap(),
+            get_transactions_hash(&circuit_to_verify_against.transactions.as_ref().unwrap())
+                .to_field_elements()
+                .unwrap()[0],
         ];
 
         let proof = Groth16::prove(&pk, circuit_to_verify_against, &mut rng).unwrap();
@@ -472,6 +525,9 @@ mod test {
         let public_input = [
             circuit_to_verify_against.final_root.unwrap(),
             circuit_to_verify_against.final_root.unwrap(),
+            get_transactions_hash(&circuit_to_verify_against.transactions.as_ref().unwrap())
+                .to_field_elements()
+                .unwrap()[0],
         ];
 
         let proof = Groth16::prove(&pk, circuit_to_verify_against, &mut rng).unwrap();

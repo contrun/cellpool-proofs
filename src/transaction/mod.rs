@@ -1,5 +1,8 @@
 use crate::signature::Signature;
 
+use crate::random_oracle::blake2s::RO;
+use crate::random_oracle::RandomOracle;
+
 use super::account::{AccountId, AccountPublicKey, AccountSecretKey};
 use super::ledger::{self, Amount};
 use super::signature::{
@@ -23,6 +26,27 @@ pub struct Transaction {
     pub recipient: AccountId,
     /// The amount being transferred from the sender to the receiver.
     pub amount: Amount,
+}
+
+impl Transaction {
+    /// Convert the account information to bytes.
+    pub fn to_bytes_le(&self) -> Vec<u8> {
+        ark_ff::to_bytes![
+            self.sender.to_bytes_le(),
+            self.recipient.to_bytes_le(),
+            self.amount.to_bytes_le()
+        ]
+        .unwrap()
+    }
+}
+
+pub fn get_transactions_hash(transactions: &[Transaction]) -> [u8; 32] {
+    let parameters = ();
+    let mut hash_input = Vec::new();
+    for transaction in transactions {
+        hash_input.extend_from_slice(&transaction.to_bytes_le());
+    }
+    RO::evaluate(&parameters, &hash_input).unwrap()
 }
 
 /// Transaction transferring some amount from one account to another.
