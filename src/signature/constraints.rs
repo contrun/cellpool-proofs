@@ -63,8 +63,8 @@ mod test {
         let signature_var = SG::SignatureVar::new_witness(cs.clone(), || Ok(&sig)).unwrap();
         let pk_var = SG::PublicKeyVar::new_witness(cs.clone(), || Ok(&pk)).unwrap();
         let mut msg_var = Vec::new();
-        for i in 0..message.len() {
-            msg_var.push(UInt8::new_witness(cs.clone(), || Ok(&message[i])).unwrap())
+        for msg in message {
+            msg_var.push(UInt8::new_witness(cs.clone(), || Ok(msg)).unwrap())
         }
         let valid_sig_var = SG::verify(&parameters_var, &pk_var, &msg_var, &signature_var).unwrap();
 

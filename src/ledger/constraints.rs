@@ -9,7 +9,7 @@ use ark_crypto_primitives::crh::{
     injective_map::TECompressor,
 };
 use ark_crypto_primitives::merkle_tree::constraints::PathVar;
-pub use ark_ed_on_bls12_381::{constraints::EdwardsVar, EdwardsProjective};
+use ark_ed_on_bls12_381::{constraints::EdwardsVar, EdwardsProjective};
 use ark_r1cs_std::bits::uint64::UInt64;
 use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{Namespace, SynthesisError};
