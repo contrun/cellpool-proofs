@@ -1,3 +1,5 @@
+use crate::rollup::Rollup;
+
 use super::account::{AccountId, AccountInformation, AccountPublicKey, AccountSecretKey};
 use super::signature::{schnorr, SignatureScheme};
 use super::transaction::SignedTransaction;
@@ -101,6 +103,8 @@ pub struct State {
     pub id_to_account_info: HashMap<AccountId, AccountInformation>,
     /// A mapping from a public key to an account's identifier.
     pub pub_key_to_id: HashMap<schnorr::PublicKey<EdwardsProjective>, AccountId>,
+    /// Parameters used for signature verification.
+    pub parameters: Parameters,
 }
 
 impl State {
@@ -120,6 +124,7 @@ impl State {
             account_merkle_tree,
             id_to_account_info,
             pub_key_to_id,
+            parameters: parameters.clone(),
         }
     }
 
@@ -217,13 +222,28 @@ impl State {
             .get(pk)
             .and_then(|id| self.get_account_information_from_id(id))
     }
+
+    pub fn rollup_transactions(
+        &mut self,
+        transactions: &[SignedTransaction],
+        validate_transactions: bool,
+        create_non_existent_accounts: bool,
+    ) -> Option<Rollup> {
+        let parameters = self.parameters.clone();
+        Rollup::with_state_and_transactions(
+            parameters,
+            transactions,
+            self,
+            validate_transactions,
+            create_non_existent_accounts,
+        )
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::SignedTransaction;
     use super::{Amount, Parameters, State};
-    
 
     #[test]
     fn end_to_end() {

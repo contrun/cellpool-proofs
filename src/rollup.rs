@@ -14,7 +14,7 @@ use crate::{
 use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
-pub struct Rollup<const NUM_TX: usize> {
+pub struct Rollup {
     /// The ledger parameters.
     pub ledger_params: Parameters,
     /// The Merkle tree root before applying this batch of transactions.
@@ -42,8 +42,25 @@ pub struct Rollup<const NUM_TX: usize> {
     pub post_tx_roots: Option<Vec<AccRoot>>,
 }
 
-impl<const NUM_TX: usize> Rollup<NUM_TX> {
-    pub fn new_empty(ledger_params: Parameters) -> Self {
+impl Rollup {
+    pub fn new_empty() -> Self {
+        let mut rng = ark_std::test_rng();
+        let ledger_params = Parameters::sample(&mut rng);
+        Self {
+            ledger_params,
+            initial_root: None,
+            final_root: None,
+            transactions: None,
+            signatures: None,
+            sender_pre_tx_info_and_paths: None,
+            sender_post_paths: None,
+            recv_pre_tx_info_and_paths: None,
+            recv_post_paths: None,
+            post_tx_roots: None,
+        }
+    }
+
+    pub fn new_with_parmas(ledger_params: Parameters) -> Self {
         Self {
             ledger_params,
             initial_root: None,
@@ -97,13 +114,13 @@ impl<const NUM_TX: usize> Rollup<NUM_TX> {
         validate_transactions: bool,
         _create_non_existent_accounts: bool,
     ) -> Option<Self> {
-        assert_eq!(transactions.len(), NUM_TX);
+        let num_tx = transactions.len();
         let initial_root = Some(state.root());
-        let mut sender_pre_tx_info_and_paths = Vec::with_capacity(NUM_TX);
-        let mut recipient_pre_tx_info_and_paths = Vec::with_capacity(NUM_TX);
-        let mut sender_post_paths = Vec::with_capacity(NUM_TX);
-        let mut recipient_post_paths = Vec::with_capacity(NUM_TX);
-        let mut post_tx_roots = Vec::with_capacity(NUM_TX);
+        let mut sender_pre_tx_info_and_paths = Vec::with_capacity(num_tx);
+        let mut recipient_pre_tx_info_and_paths = Vec::with_capacity(num_tx);
+        let mut sender_post_paths = Vec::with_capacity(num_tx);
+        let mut recipient_post_paths = Vec::with_capacity(num_tx);
+        let mut post_tx_roots = Vec::with_capacity(num_tx);
         for tx in transactions {
             if !tx.validate(&ledger_params, &*state) && validate_transactions {
                 return None;
@@ -159,12 +176,14 @@ impl<const NUM_TX: usize> Rollup<NUM_TX> {
     }
 }
 
-impl<const NUM_TX: usize> ConstraintSynthesizer<ConstraintF> for Rollup<NUM_TX> {
+impl ConstraintSynthesizer<ConstraintF> for Rollup {
     #[tracing::instrument(target = "r1cs", skip(self, cs))]
     fn generate_constraints(
         self,
         cs: ConstraintSystemRef<ConstraintF>,
     ) -> Result<(), SynthesisError> {
+        // TODO: maybe we need to check the length of transactions and that of paths are equal.
+
         // Declare the parameters as constants.
         let ledger_params = ParametersVar::new_constant(
             ark_relations::ns!(cs, "Ledger parameters"),
@@ -217,7 +236,7 @@ impl<const NUM_TX: usize> ConstraintSynthesizer<ConstraintF> for Rollup<NUM_TX> 
 
         let mut prev_root = initial_root;
 
-        for i in 0..NUM_TX {
+        for i in 0..transaction_list.len() {
             let tx = self.transactions.as_ref().and_then(|t| t.get(i));
             let signature = self.signatures.as_ref().and_then(|t| t.get(i));
 
@@ -307,7 +326,7 @@ impl<const NUM_TX: usize> ConstraintSynthesizer<ConstraintF> for Rollup<NUM_TX> 
 #[cfg(test)]
 mod test {
     use super::*;
-    
+
     use crate::ledger::{Amount, Parameters, State};
     use crate::transaction::SignedTransaction;
     use ark_relations::r1cs::{
@@ -315,7 +334,7 @@ mod test {
     };
     use tracing_subscriber::layer::SubscriberExt;
 
-    fn test_cs<const NUM_TX: usize>(rollup: Rollup<NUM_TX>) -> bool {
+    fn test_cs(rollup: Rollup) -> bool {
         let mut layer = ConstraintLayer::default();
         layer.mode = OnlyConstraints;
         let subscriber = tracing_subscriber::Registry::default().with(layer);
@@ -347,21 +366,16 @@ mod test {
         let mut temp_state = state.clone();
         let tx1 = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &alice_sk, &mut rng);
         assert!(tx1.validate(&pp, &temp_state));
-        let rollup = Rollup::<1>::with_state_and_transactions(
-            pp.clone(),
-            &[tx1],
-            &mut temp_state,
-            true,
-            true,
-        )
-        .unwrap();
+        let rollup =
+            Rollup::with_state_and_transactions(pp.clone(), &[tx1], &mut temp_state, true, true)
+                .unwrap();
         assert!(test_cs(rollup));
 
         let mut temp_state = state.clone();
         let bad_tx = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &bob_sk, &mut rng);
         assert!(!bad_tx.validate(&pp, &temp_state));
         assert!(matches!(temp_state.apply_transaction(&pp, &bad_tx), None));
-        let rollup = Rollup::<1>::with_state_and_transactions(
+        let rollup = Rollup::with_state_and_transactions(
             pp.clone(),
             &[bad_tx.clone()],
             &mut temp_state,
@@ -390,7 +404,7 @@ mod test {
         let mut temp_state = state.clone();
         let tx1 = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &alice_sk, &mut rng);
         assert!(tx1.validate(&pp, &temp_state));
-        let rollup = Rollup::<1>::with_state_and_transactions(
+        let rollup = Rollup::with_state_and_transactions(
             pp.clone(),
             &[tx1.clone()],
             &mut temp_state,
@@ -401,7 +415,7 @@ mod test {
         assert!(test_cs(rollup));
 
         let mut temp_state = state.clone();
-        let rollup = Rollup::<2>::with_state_and_transactions(
+        let rollup = Rollup::with_state_and_transactions(
             pp.clone(),
             &[tx1.clone(), tx1],
             &mut temp_state,
@@ -430,7 +444,7 @@ mod test {
             SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(21), &alice_sk, &mut rng);
         assert!(!bad_tx.validate(&pp, &temp_state));
         assert!(matches!(temp_state.apply_transaction(&pp, &bad_tx), None));
-        let rollup = Rollup::<1>::with_state_and_transactions(
+        let rollup = Rollup::with_state_and_transactions(
             pp.clone(),
             &[bad_tx.clone()],
             &mut temp_state,
@@ -445,7 +459,7 @@ mod test {
         let bad_tx = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &bob_sk, &mut rng);
         assert!(!bad_tx.validate(&pp, &temp_state));
         assert!(matches!(temp_state.apply_transaction(&pp, &bad_tx), None));
-        let rollup = Rollup::<1>::with_state_and_transactions(
+        let rollup = Rollup::with_state_and_transactions(
             pp.clone(),
             &[bad_tx.clone()],
             &mut temp_state,
@@ -470,7 +484,7 @@ mod test {
 
     // Builds a circuit with two txs, using different pubkeys & amounts every time.
     // It returns this circuit
-    fn build_two_tx_circuit() -> Rollup<2> {
+    fn build_two_tx_circuit() -> Rollup {
         use ark_std::rand::Rng;
         let mut rng = ark_std::test_rng();
         let pp = Parameters::sample(&mut rng);
@@ -497,7 +511,7 @@ mod test {
             &mut rng,
         );
 
-        Rollup::<2>::with_state_and_transactions(
+        Rollup::with_state_and_transactions(
             pp.clone(),
             &[tx1.clone(), tx1],
             &mut temp_state,
