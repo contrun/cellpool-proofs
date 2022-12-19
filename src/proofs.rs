@@ -33,7 +33,7 @@ pub fn verify(
     Groth16::verify(&proof.vk, &public_inputs, &proof.proof)
 }
 
-fn get_public_inputs(
+pub(crate) fn get_public_inputs(
     initial_root: AccRoot,
     final_root: AccRoot,
     transactions: &[Transaction],
@@ -62,11 +62,11 @@ mod test {
         use ark_std::rand::Rng;
         let mut rng = ark_std::test_rng();
         let pp = Parameters::sample(&mut rng);
-        let mut state = State::new(32, &pp);
+        let mut state = State::new_with_parameters(32, &pp);
         // Let's make an account for Alice.
-        let (alice_id, alice_pk, alice_sk) = state.sample_keys_and_register(&pp, &mut rng).unwrap();
+        let (alice_id, alice_pk, alice_sk) = state.sample_keys_and_register(&mut rng).unwrap();
         // Let's make an account for Bob.
-        let (_bob_id, bob_pk, _bob_sk) = state.sample_keys_and_register(&pp, &mut rng).unwrap();
+        let (_bob_id, bob_pk, _bob_sk) = state.sample_keys_and_register(&mut rng).unwrap();
 
         let mut alice_balance = 0;
         let mut txs = Vec::with_capacity(n);
