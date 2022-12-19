@@ -22,9 +22,20 @@ pub struct TransactionVar {
     pub recipient: AccountIdVar,
     /// The amount being transferred from the sender to the receiver.
     pub amount: AmountVar,
+    /// The fee being collected by the miner.
+    pub fee: AmountVar,
 }
 
 impl TransactionVar {
+    /// Convert the transaction information to bytes.
+    pub fn to_bytes_le(&self) -> Vec<UInt8<ConstraintF>> {
+        let mut message = self.sender.to_bytes_le();
+        message.extend(self.recipient.to_bytes_le());
+        message.extend(self.amount.to_bytes_le());
+        message.extend(self.fee.to_bytes_le());
+        message
+    }
+
     /// Verify just the signature in the transaction.
     #[tracing::instrument(target = "r1cs", skip(self, pp, pub_key))]
     fn verify_signature(
@@ -33,11 +44,7 @@ impl TransactionVar {
         pub_key: &AccountPublicKeyVar,
         signature: &SignatureVar,
     ) -> Result<Boolean<ConstraintF>, SynthesisError> {
-        // The authorized message consists of
-        // (SenderAccId || SenderPubKey || RecipientAccId || RecipientPubKey || Amount)
-        let mut message = self.sender.to_bytes_le();
-        message.extend(self.recipient.to_bytes_le());
-        message.extend(self.amount.to_bytes_le());
+        let message = self.to_bytes_le();
         SchnorrSignatureVerifyGadget::verify(pp, pub_key, &message, signature)
     }
 
@@ -145,10 +152,12 @@ impl AllocVar<Transaction, ConstraintF> for TransactionVar {
             let sender = AccountIdVar::new_variable(cs.clone(), || Ok(&tx.sender), mode)?;
             let recipient = AccountIdVar::new_variable(cs.clone(), || Ok(&tx.recipient), mode)?;
             let amount = AmountVar::new_variable(cs.clone(), || Ok(&tx.amount), mode)?;
+            let fee = AmountVar::new_variable(cs.clone(), || Ok(&tx.fee), mode)?;
             Ok(Self {
                 sender,
                 recipient,
                 amount,
+                fee,
             })
         })
     }

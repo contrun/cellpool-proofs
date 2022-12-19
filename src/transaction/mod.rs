@@ -26,15 +26,18 @@ pub struct Transaction {
     pub recipient: AccountId,
     /// The amount being transferred from the sender to the receiver.
     pub amount: Amount,
+    /// The fee being collected by the miner.
+    pub fee: Amount,
 }
 
 impl Transaction {
-    /// Convert the account information to bytes.
+    /// Convert the transaction information to bytes.
     pub fn to_bytes_le(&self) -> Vec<u8> {
         ark_ff::to_bytes![
             self.sender.to_bytes_le(),
             self.recipient.to_bytes_le(),
-            self.amount.to_bytes_le()
+            self.amount.to_bytes_le(),
+            self.fee.to_bytes_le()
         ]
         .unwrap()
     }
@@ -44,6 +47,7 @@ impl Transaction {
             sender,
             recipient,
             amount,
+            fee: ledger::Amount(0),
         }
     }
 }
@@ -88,6 +92,10 @@ impl SignedTransaction {
 
     pub fn amount(&self) -> Amount {
         self.transaction.amount
+    }
+
+    pub fn fee(&self) -> Amount {
+        self.transaction.fee
     }
 
     /// Verify just the signature in the transaction.

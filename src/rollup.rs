@@ -189,7 +189,7 @@ impl<const NUM_TX: usize> ConstraintSynthesizer<ConstraintF> for Rollup<NUM_TX> 
         // Declare the transactions hash as a public input.
         let transactions_hash =
             ark_crypto_primitives::prf::blake2s::constraints::OutputVar::new_input(
-                ark_relations::ns!(cs, "Transactions"),
+                ark_relations::ns!(cs, "Transactions hash"),
                 || Ok(&transactions_hash),
             )?;
 
