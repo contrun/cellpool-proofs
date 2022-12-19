@@ -33,7 +33,7 @@ pub fn verify(
     Groth16::verify(&proof.vk, &public_inputs, &proof.proof)
 }
 
-pub fn get_public_inputs(
+fn get_public_inputs(
     initial_root: AccRoot,
     final_root: AccRoot,
     transactions: &[Transaction],
@@ -51,10 +51,9 @@ pub fn get_public_inputs(
 
 #[cfg(test)]
 mod test {
-    use crate::ledger::Amount;
 
     use super::*;
-    use crate::ledger::{Parameters, State};
+    use crate::ledger::{Amount, Parameters, State};
 
     fn build_n_transactions(
         n: usize,
