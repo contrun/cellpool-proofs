@@ -9,6 +9,7 @@ use ark_crypto_primitives::crh::{
 };
 use ark_crypto_primitives::merkle_tree::{self, MerkleTree, Path};
 use ark_ed_on_bls12_381::EdwardsProjective;
+use ark_serialize::*;
 use ark_std::rand::Rng;
 use std::collections::HashMap;
 
@@ -18,7 +19,18 @@ pub mod constraints;
 pub use constraints::*;
 
 /// Represents transaction amounts and account balances.
-#[derive(Hash, Eq, PartialEq, Copy, Clone, PartialOrd, Ord, Debug)]
+#[derive(
+    Hash,
+    Eq,
+    PartialEq,
+    Copy,
+    Clone,
+    PartialOrd,
+    Ord,
+    Debug,
+    CanonicalSerialize,
+    CanonicalDeserialize,
+)]
 pub struct Amount(pub u64);
 
 impl Amount {

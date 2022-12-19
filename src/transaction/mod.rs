@@ -11,6 +11,7 @@ use super::signature::{
     SignatureScheme,
 };
 use ark_ed_on_bls12_381::EdwardsProjective;
+use ark_serialize::*;
 use ark_std::rand::Rng;
 
 #[cfg(feature = "r1cs")]
@@ -19,7 +20,7 @@ pub mod constraints;
 pub use constraints::*;
 
 /// Transaction transferring some amount from one account to another.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, CanonicalSerialize, CanonicalDeserialize)]
 pub struct Transaction {
     /// The account information of the sender.
     pub sender: AccountPublicKey,

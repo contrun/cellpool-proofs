@@ -10,8 +10,12 @@ pub mod signature;
 
 pub mod rollup;
 
-mod proofs;
+pub mod proofs;
+
+pub use account::{AccountId, AccountInformation, AccountPublicKey, AccountSecretKey};
+pub use ledger::{AccMerkleTree, AccPath, AccRoot, Amount, State};
 pub use proofs::*;
+pub use transaction::{get_transactions_hash, SignedTransaction, Transaction};
 
 extern crate ark_crypto_primitives;
 extern crate derivative;
