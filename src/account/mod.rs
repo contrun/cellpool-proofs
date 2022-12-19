@@ -14,12 +14,13 @@ pub type AccountSecretKey = schnorr::SecretKey<EdwardsProjective>;
 
 /// Account identifier. This prototype supports only 256 accounts at a time.
 #[derive(Hash, Eq, PartialEq, Copy, Clone, Ord, PartialOrd, Debug)]
-pub struct AccountId(pub u8);
+pub struct AccountId(pub WrappedAccountId);
+type WrappedAccountId = u16;
 
 impl AccountId {
     /// Convert the account identifier to bytes.
     pub fn to_bytes_le(&self) -> Vec<u8> {
-        vec![self.0]
+        self.0.to_le_bytes().to_vec()
     }
 }
 

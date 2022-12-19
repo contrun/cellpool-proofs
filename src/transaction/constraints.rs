@@ -269,7 +269,7 @@ impl ConstraintSynthesizer<ConstraintF> for UnaryRollup {
 
         // Declare transaction as a witness.
         let tx = TransactionVar::new_witness(ark_relations::ns!(cs, "Transaction"), || {
-            Ok(self.transaction.clone())
+            Ok(self.transaction)
         })?;
 
         // Declare signature as a witness.
