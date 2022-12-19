@@ -3,17 +3,12 @@ use crate::rollup::Rollup;
 use super::account::{AccountId, AccountInformation, AccountPublicKey, AccountSecretKey};
 use super::signature::{schnorr, SignatureScheme};
 use super::transaction::SignedTransaction;
-use crate::ConstraintF;
-use ark_bls12_381::Bls12_381;
 use ark_crypto_primitives::crh::{
     injective_map::{PedersenCRHCompressor, TECompressor},
     pedersen, TwoToOneCRH, CRH,
 };
 use ark_crypto_primitives::merkle_tree::{self, MerkleTree, Path};
 use ark_ed_on_bls12_381::EdwardsProjective;
-use ark_groth16::Groth16;
-use ark_groth16::Proof;
-use ark_snark::SNARK;
 use ark_std::rand::Rng;
 use std::collections::HashMap;
 
