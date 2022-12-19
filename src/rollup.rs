@@ -58,16 +58,17 @@ impl<const NUM_TX: usize> Rollup<NUM_TX> {
         }
     }
 
-    // TODO: Gather all public inputs here.
-    pub fn get_public_inputs(&self) -> Option<Vec<ConstraintF>> {
-        // [
-        //     circuit_to_verify_against.final_root.unwrap(),
-        //     circuit_to_verify_against.final_root.unwrap(),
-        //     get_transactions_hash(&circuit_to_verify_against.transactions.as_ref().unwrap())
-        //         .to_field_elements()
-        //         .unwrap()[0],
-        // ]
-        None
+    pub fn must_get_public_inputs(&self) -> Vec<ConstraintF> {
+        use ark_ff::ToConstraintField;
+        let transaction_fields: Vec<ConstraintF> =
+            get_transactions_hash(&self.transactions.as_ref().unwrap())
+                .to_field_elements()
+                .unwrap();
+        let mut result = Vec::with_capacity(transaction_fields.len() + 2);
+        result.push(self.initial_root.unwrap());
+        result.push(self.final_root.unwrap());
+        result.extend(transaction_fields);
+        result
     }
 
     pub fn only_initial_and_final_roots(
@@ -178,39 +179,40 @@ impl<const NUM_TX: usize> ConstraintSynthesizer<ConstraintF> for Rollup<NUM_TX> 
             self.final_root.ok_or(SynthesisError::AssignmentMissing)
         })?;
 
+        // Enforce the transacations hash from input is legal
         let transaction_list = self
             .transactions
             .as_ref()
             .ok_or(SynthesisError::AssignmentMissing)?;
 
         let transactions_hash = get_transactions_hash(transaction_list);
-        // Declare the final root as a public input.
-        let transactions = ark_crypto_primitives::prf::blake2s::constraints::OutputVar::new_input(
-            ark_relations::ns!(cs, "Transactions"),
-            || Ok(&transactions_hash),
-        )?;
+        // Declare the transactions hash as a public input.
+        let transactions_hash =
+            ark_crypto_primitives::prf::blake2s::constraints::OutputVar::new_input(
+                ark_relations::ns!(cs, "Transactions"),
+                || Ok(&transactions_hash),
+            )?;
 
-        let mut hash_input_var = vec![];
+        let mut hash_input = vec![];
         for transaction in transaction_list {
             for byte in transaction.to_bytes_le() {
-                hash_input_var.push(UInt8::new_witness(cs.clone(), || Ok(byte)).unwrap());
+                hash_input.push(UInt8::new_witness(cs.clone(), || Ok(byte)).unwrap());
             }
         }
 
-        let ro_parameters = ();
-        let ro_parameters_var =
+        let hash_parameters =
             <ROGadget as RandomOracleGadget<RO, ConstraintF>>::ParametersVar::new_witness(
                 ark_relations::ns!(cs, "RandomOracle Parameters"),
-                || Ok(&ro_parameters),
+                || Ok(&()),
             )
             .unwrap();
-        let hash_result_var = <ROGadget as RandomOracleGadget<RO, ConstraintF>>::evaluate(
-            &ro_parameters_var,
-            &hash_input_var,
+        let hash_result = <ROGadget as RandomOracleGadget<RO, ConstraintF>>::evaluate(
+            &hash_parameters,
+            &hash_input,
         )
         .unwrap();
 
-        transactions.enforce_equal(&hash_result_var)?;
+        transactions_hash.enforce_equal(&hash_result)?;
 
         let mut prev_root = initial_root;
 
@@ -307,7 +309,6 @@ mod test {
     use crate::account::AccountId;
     use crate::ledger::{Amount, Parameters, State};
     use crate::transaction::SignedTransaction;
-    use ark_ff::ToConstraintField;
     use ark_relations::r1cs::{
         ConstraintLayer, ConstraintSynthesizer, ConstraintSystem, TracingMode::OnlyConstraints,
     };
@@ -506,13 +507,7 @@ mod test {
         // Use the same circuit but with different inputs to verify against
         // This test checks that the SNARK passes on the provided input
         let circuit_to_verify_against = build_two_tx_circuit();
-        let public_input = [
-            circuit_to_verify_against.initial_root.unwrap(),
-            circuit_to_verify_against.final_root.unwrap(),
-            get_transactions_hash(&circuit_to_verify_against.transactions.as_ref().unwrap())
-                .to_field_elements()
-                .unwrap()[0],
-        ];
+        let public_input = circuit_to_verify_against.must_get_public_inputs();
 
         let proof = Groth16::prove(&pk, circuit_to_verify_against, &mut rng).unwrap();
         let valid_proof = Groth16::verify(&vk, &public_input, &proof).unwrap();
@@ -522,13 +517,8 @@ mod test {
         // This test checks that the SNARK fails on the wrong input
         let circuit_to_verify_against = build_two_tx_circuit();
         // Error introduced, used the final root twice!
-        let public_input = [
-            circuit_to_verify_against.final_root.unwrap(),
-            circuit_to_verify_against.final_root.unwrap(),
-            get_transactions_hash(&circuit_to_verify_against.transactions.as_ref().unwrap())
-                .to_field_elements()
-                .unwrap()[0],
-        ];
+        let mut public_input = circuit_to_verify_against.must_get_public_inputs();
+        public_input[0] = public_input[1];
 
         let proof = Groth16::prove(&pk, circuit_to_verify_against, &mut rng).unwrap();
         let valid_proof = Groth16::verify(&vk, &public_input, &proof).unwrap();
