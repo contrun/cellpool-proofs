@@ -41,12 +41,11 @@ impl Transaction {
 }
 
 pub fn get_transactions_hash(transactions: &[Transaction]) -> [u8; 32] {
-    let parameters = ();
     let mut hash_input = Vec::new();
     for transaction in transactions {
         hash_input.extend_from_slice(&transaction.to_bytes_le());
     }
-    RO::evaluate(&parameters, &hash_input).unwrap()
+    RO::evaluate(&(), &hash_input).unwrap()
 }
 
 /// Transaction transferring some amount from one account to another.

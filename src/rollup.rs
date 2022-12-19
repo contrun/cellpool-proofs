@@ -61,7 +61,7 @@ impl<const NUM_TX: usize> Rollup<NUM_TX> {
     pub fn must_get_public_inputs(&self) -> Vec<ConstraintF> {
         use ark_ff::ToConstraintField;
         let transaction_fields: Vec<ConstraintF> =
-            get_transactions_hash(&self.transactions.as_ref().unwrap())
+            get_transactions_hash(self.transactions.as_ref().unwrap())
                 .to_field_elements()
                 .unwrap();
         let mut result = Vec::with_capacity(transaction_fields.len() + 2);
@@ -485,7 +485,7 @@ mod test {
 
         Rollup::<2>::with_state_and_transactions(
             pp.clone(),
-            &[tx1.clone(), tx1.clone()],
+            &[tx1.clone(), tx1],
             &mut temp_state,
             true,
         )

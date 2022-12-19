@@ -63,8 +63,7 @@ mod test {
         type TestRO = RO;
         type TestROGadget = ROGadget;
 
-        let parameters = ();
-        let primitive_result = RO::evaluate(&parameters, &input).unwrap();
+        let primitive_result = RO::evaluate(&(), &input).unwrap();
 
         let mut input_var = vec![];
         for byte in &input {
@@ -74,15 +73,15 @@ mod test {
         let parameters_var =
             <TestROGadget as RandomOracleGadget<TestRO, Fr>>::ParametersVar::new_witness(
                 ark_relations::ns!(cs, "gadget_parameters"),
-                || Ok(&parameters),
+                || Ok(&()),
             )
             .unwrap();
         let result_var =
             <TestROGadget as RandomOracleGadget<TestRO, Fr>>::evaluate(&parameters_var, &input_var)
                 .unwrap();
 
-        for i in 0..32 {
-            assert_eq!(primitive_result[i], result_var.0[i].value().unwrap());
+        for (result1, result2) in primitive_result.into_iter().zip(result_var.0) {
+            assert_eq!(result1, result2.value().unwrap());
         }
         assert!(cs.is_satisfied().unwrap());
     }
