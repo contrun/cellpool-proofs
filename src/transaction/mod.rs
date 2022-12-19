@@ -119,7 +119,7 @@ impl SignedTransaction {
     /// 2. Verify that the sender's account has sufficient balance to finance
     /// the transaction.
     /// 3. Verify that the recipient's account exists.
-    pub fn validate(&self, parameters: &ledger::Parameters, state: &ledger::State) -> bool {
+    pub fn validate(&self, state: &ledger::State) -> bool {
         // Lookup public key corresponding to sender ID
         if let Some(sender_acc_info) = state.get_account_information_from_pk(&self.sender()) {
             let mut result = true;
@@ -130,15 +130,16 @@ impl SignedTransaction {
                     .generate_proof(sender_acc_info.id.0 as usize)
                     .expect("path should exist");
                 path.verify(
-                    &parameters.leaf_crh_params,
-                    &parameters.two_to_one_crh_params,
+                    &state.parameters.leaf_crh_params,
+                    &state.parameters.two_to_one_crh_params,
                     &state.account_merkle_tree.root(),
                     &sender_acc_info.to_bytes_le(),
                 )
                 .unwrap()
             };
             // Verify the signature against the sender pubkey.
-            result &= self.verify_signature(&parameters.sig_params, &sender_acc_info.public_key);
+            result &=
+                self.verify_signature(&state.parameters.sig_params, &sender_acc_info.public_key);
             // assert!(result, "signature verification failed");
             // Verify the amount is available in the sender account.
             result &= self.amount() <= sender_acc_info.balance;

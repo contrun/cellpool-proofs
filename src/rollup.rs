@@ -8,8 +8,7 @@ use crate::transaction::{get_transactions_hash, Transaction, TransactionVar};
 use crate::ConstraintF;
 use crate::{
     account::AccountInformation,
-    ledger::{AccPath, AccRoot, Parameters, State},
-    transaction::SignedTransaction,
+    ledger::{AccPath, AccRoot, Parameters},
 };
 use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
@@ -43,25 +42,18 @@ pub struct Rollup {
     pub post_tx_roots: Option<Vec<AccRoot>>,
 }
 
+impl Default for Rollup {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Rollup {
-    pub fn new_empty() -> Self {
-        let mut rng = ark_std::test_rng();
-        let ledger_params = Parameters::sample(&mut rng);
-        Self {
-            ledger_params,
-            initial_root: None,
-            final_root: None,
-            transactions: None,
-            signatures: None,
-            sender_pre_tx_info_and_paths: None,
-            sender_post_paths: None,
-            recv_pre_tx_info_and_paths: None,
-            recv_post_paths: None,
-            post_tx_roots: None,
-        }
+    pub fn new() -> Self {
+        Self::new_with_parameters(Parameters::unsecure_hardcoded_parameters())
     }
 
-    pub fn new_with_params(ledger_params: Parameters) -> Self {
+    pub fn new_with_parameters(ledger_params: Parameters) -> Self {
         Self {
             ledger_params,
             initial_root: None,
@@ -77,16 +69,11 @@ impl Rollup {
     }
 
     pub fn must_get_public_inputs(&self) -> Vec<ConstraintF> {
-        use ark_ff::ToConstraintField;
-        let transaction_fields: Vec<ConstraintF> =
-            get_transactions_hash(self.transactions.as_ref().unwrap())
-                .to_field_elements()
-                .unwrap();
-        let mut result = Vec::with_capacity(transaction_fields.len() + 2);
-        result.push(self.initial_root.unwrap());
-        result.push(self.final_root.unwrap());
-        result.extend(transaction_fields);
-        result
+        crate::get_public_inputs(
+            self.initial_root.unwrap(),
+            self.final_root.unwrap(),
+            self.transactions.as_ref().unwrap(),
+        )
     }
 
     pub fn only_initial_and_final_roots(
@@ -106,74 +93,6 @@ impl Rollup {
             recv_post_paths: None,
             post_tx_roots: None,
         }
-    }
-
-    pub fn with_state_and_transactions(
-        ledger_params: Parameters,
-        transactions: &[SignedTransaction],
-        state: &mut State,
-        validate_transactions: bool,
-        _create_non_existent_accounts: bool,
-    ) -> Option<Self> {
-        let num_tx = transactions.len();
-        let initial_root = Some(state.root());
-        let mut sender_pre_tx_info_and_paths = Vec::with_capacity(num_tx);
-        let mut recipient_pre_tx_info_and_paths = Vec::with_capacity(num_tx);
-        let mut sender_post_paths = Vec::with_capacity(num_tx);
-        let mut recipient_post_paths = Vec::with_capacity(num_tx);
-        let mut post_tx_roots = Vec::with_capacity(num_tx);
-        for tx in transactions {
-            if !tx.validate(&ledger_params, &*state) && validate_transactions {
-                return None;
-            }
-        }
-        for tx in transactions {
-            let sender_id = tx.sender();
-            let recipient_id = tx.recipient();
-            let sender_pre_acc_info = state.get_account_information_from_pk(&sender_id)?;
-            let sender_pre_path = state
-                .account_merkle_tree
-                .generate_proof(sender_pre_acc_info.id.0 as usize)
-                .unwrap();
-            let recipient_pre_acc_info = state.get_account_information_from_pk(&recipient_id)?;
-            let recipient_pre_path = state
-                .account_merkle_tree
-                .generate_proof(recipient_pre_acc_info.id.0 as usize)
-                .unwrap();
-
-            if validate_transactions {
-                state.apply_transaction(&ledger_params, tx)?;
-            } else {
-                let _ = state.apply_transaction(&ledger_params, tx);
-            }
-            let post_tx_root = state.root();
-            let sender_post_path = state
-                .account_merkle_tree
-                .generate_proof(sender_pre_acc_info.id.0 as usize)
-                .unwrap();
-            let recipient_post_path = state
-                .account_merkle_tree
-                .generate_proof(recipient_pre_acc_info.id.0 as usize)
-                .unwrap();
-            sender_pre_tx_info_and_paths.push((sender_pre_acc_info, sender_pre_path));
-            recipient_pre_tx_info_and_paths.push((recipient_pre_acc_info, recipient_pre_path));
-            sender_post_paths.push(sender_post_path);
-            recipient_post_paths.push(recipient_post_path);
-            post_tx_roots.push(post_tx_root);
-        }
-
-        Some(Self {
-            ledger_params,
-            initial_root,
-            final_root: Some(state.root()),
-            transactions: Some(transactions.iter().map(Into::into).collect()),
-            signatures: Some(transactions.iter().map(|s| s.signature.clone()).collect()),
-            sender_pre_tx_info_and_paths: Some(sender_pre_tx_info_and_paths),
-            recv_pre_tx_info_and_paths: Some(recipient_pre_tx_info_and_paths),
-            sender_post_paths: Some(sender_post_paths),
-            recv_post_paths: Some(recipient_post_paths),
-            post_tx_roots: Some(post_tx_roots),
-        })
     }
 }
 
@@ -353,37 +272,30 @@ mod test {
     fn single_tx_validity_test() {
         let mut rng = ark_std::test_rng();
         let pp = Parameters::sample(&mut rng);
-        let mut state = State::new(32, &pp);
+        let mut state = State::new_with_parameters(32, &pp);
         // Let's make an account for Alice.
-        let (alice_id, alice_pk, alice_sk) = state.sample_keys_and_register(&pp, &mut rng).unwrap();
+        let (alice_id, alice_pk, alice_sk) = state.sample_keys_and_register(&mut rng).unwrap();
         // Let's give her some initial balance to start with.
         state
             .update_balance_by_id(&alice_id, Amount(20))
             .expect("Alice's account should exist");
         // Let's make an account for Bob.
-        let (_bob_id, bob_pk, bob_sk) = state.sample_keys_and_register(&pp, &mut rng).unwrap();
+        let (_bob_id, bob_pk, bob_sk) = state.sample_keys_and_register(&mut rng).unwrap();
 
         // Alice wants to transfer 5 units to Bob.
         let mut temp_state = state.clone();
         let tx1 = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &alice_sk, &mut rng);
-        assert!(tx1.validate(&pp, &temp_state));
-        let rollup =
-            Rollup::with_state_and_transactions(pp.clone(), &[tx1], &mut temp_state, true, true)
-                .unwrap();
+        assert!(tx1.validate(&temp_state));
+        let rollup = temp_state.rollup_transactions(&[tx1], true, true).unwrap();
         assert!(test_cs(rollup));
 
         let mut temp_state = state.clone();
         let bad_tx = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &bob_sk, &mut rng);
-        assert!(!bad_tx.validate(&pp, &temp_state));
-        assert!(matches!(temp_state.apply_transaction(&pp, &bad_tx), None));
-        let rollup = Rollup::with_state_and_transactions(
-            pp.clone(),
-            &[bad_tx.clone()],
-            &mut temp_state,
-            false,
-            true,
-        )
-        .unwrap();
+        assert!(!bad_tx.validate(&temp_state));
+        assert!(matches!(temp_state.apply_transaction(&bad_tx), None));
+        let rollup = temp_state
+            .rollup_transactions(&[bad_tx.clone()], false, true)
+            .unwrap();
         assert!(!test_cs(rollup));
     }
 
@@ -391,39 +303,29 @@ mod test {
     fn end_to_end() {
         let mut rng = ark_std::test_rng();
         let pp = Parameters::sample(&mut rng);
-        let mut state = State::new(32, &pp);
+        let mut state = State::new_with_parameters(32, &pp);
         // Let's make an account for Alice.
-        let (alice_id, alice_pk, alice_sk) = state.sample_keys_and_register(&pp, &mut rng).unwrap();
+        let (alice_id, alice_pk, alice_sk) = state.sample_keys_and_register(&mut rng).unwrap();
         // Let's give her some initial balance to start with.
         state
             .update_balance_by_id(&alice_id, Amount(20))
             .expect("Alice's account should exist");
         // Let's make an account for Bob.
-        let (bob_id, bob_pk, bob_sk) = state.sample_keys_and_register(&pp, &mut rng).unwrap();
+        let (bob_id, bob_pk, bob_sk) = state.sample_keys_and_register(&mut rng).unwrap();
 
         // Alice wants to transfer 5 units to Bob.
         let mut temp_state = state.clone();
         let tx1 = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &alice_sk, &mut rng);
-        assert!(tx1.validate(&pp, &temp_state));
-        let rollup = Rollup::with_state_and_transactions(
-            pp.clone(),
-            &[tx1.clone()],
-            &mut temp_state,
-            true,
-            true,
-        )
-        .unwrap();
+        assert!(tx1.validate(&temp_state));
+        let rollup = temp_state
+            .rollup_transactions(&[tx1.clone()], true, true)
+            .unwrap();
         assert!(test_cs(rollup));
 
         let mut temp_state = state.clone();
-        let rollup = Rollup::with_state_and_transactions(
-            pp.clone(),
-            &[tx1.clone(), tx1],
-            &mut temp_state,
-            true,
-            true,
-        )
-        .unwrap();
+        let rollup = temp_state
+            .rollup_transactions(&[tx1.clone(), tx1], true, true)
+            .unwrap();
         assert!(test_cs(rollup));
         assert_eq!(
             temp_state
@@ -443,31 +345,21 @@ mod test {
         let mut temp_state = state.clone();
         let bad_tx =
             SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(21), &alice_sk, &mut rng);
-        assert!(!bad_tx.validate(&pp, &temp_state));
-        assert!(matches!(temp_state.apply_transaction(&pp, &bad_tx), None));
-        let rollup = Rollup::with_state_and_transactions(
-            pp.clone(),
-            &[bad_tx.clone()],
-            &mut temp_state,
-            false,
-            true,
-        )
-        .unwrap();
+        assert!(!bad_tx.validate(&temp_state));
+        assert!(matches!(temp_state.apply_transaction(&bad_tx), None));
+        let rollup = temp_state
+            .rollup_transactions(&[bad_tx.clone()], false, true)
+            .unwrap();
         assert!(!test_cs(rollup));
 
         // Next, let's try a transaction where the signature is incorrect:
         let mut temp_state = state.clone();
         let bad_tx = SignedTransaction::create(&pp, alice_pk, bob_pk, Amount(5), &bob_sk, &mut rng);
-        assert!(!bad_tx.validate(&pp, &temp_state));
-        assert!(matches!(temp_state.apply_transaction(&pp, &bad_tx), None));
-        let rollup = Rollup::with_state_and_transactions(
-            pp.clone(),
-            &[bad_tx.clone()],
-            &mut temp_state,
-            false,
-            true,
-        )
-        .unwrap();
+        assert!(!bad_tx.validate(&temp_state));
+        assert!(matches!(temp_state.apply_transaction(&bad_tx), None));
+        let rollup = temp_state
+            .rollup_transactions(&[bad_tx.clone()], false, true)
+            .unwrap();
         assert!(!test_cs(rollup));
 
         // Finally, let's try a transaction to an non-existant account:
@@ -479,8 +371,8 @@ mod test {
             &alice_sk,
             &mut rng,
         );
-        assert!(!bad_tx.validate(&pp, &state));
-        assert!(matches!(temp_state.apply_transaction(&pp, &bad_tx), None));
+        assert!(!bad_tx.validate(&state));
+        assert!(matches!(temp_state.apply_transaction(&bad_tx), None));
     }
 
     // Builds a circuit with two txs, using different pubkeys & amounts every time.
@@ -489,15 +381,15 @@ mod test {
         use ark_std::rand::Rng;
         let mut rng = ark_std::test_rng();
         let pp = Parameters::sample(&mut rng);
-        let mut state = State::new(32, &pp);
+        let mut state = State::new_with_parameters(32, &pp);
         // Let's make an account for Alice.
-        let (alice_id, alice_pk, alice_sk) = state.sample_keys_and_register(&pp, &mut rng).unwrap();
+        let (alice_id, alice_pk, alice_sk) = state.sample_keys_and_register(&mut rng).unwrap();
         // Let's give her some initial balance to start with.
         state
             .update_balance_by_id(&alice_id, Amount(1000))
             .expect("Alice's account should exist");
         // Let's make an account for Bob.
-        let (_bob_id, bob_pk, _bob_sk) = state.sample_keys_and_register(&pp, &mut rng).unwrap();
+        let (_bob_id, bob_pk, _bob_sk) = state.sample_keys_and_register(&mut rng).unwrap();
 
         let amount_to_send = rng.gen_range(0..200);
 
@@ -512,14 +404,7 @@ mod test {
             &mut rng,
         );
 
-        Rollup::with_state_and_transactions(
-            pp.clone(),
-            &[tx1.clone(), tx1],
-            &mut temp_state,
-            true,
-            true,
-        )
-        .unwrap()
+        temp_state.rollup_transactions(&[tx1], true, true).unwrap()
     }
 
     #[test]
